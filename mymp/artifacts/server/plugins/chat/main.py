@@ -10,7 +10,7 @@ def setup(ctx, world, log):
             world.send(player, {"t": "sys", "msg": "Commands: /help /list /me /colour /pm /resources /veh /dv /save /instance /pos"})
             return True
         if cmd == "list":
-            names = ", ".join(f"{p.name}({p.id})" for p in world.players.values())
+            names = ", ".join(f"{p.name}({p.id})" for p in list(world.players.values()))
             world.send(player, {"t": "sys", "msg": f"Players: {names or 'nobody'}"})
             return True
         if cmd == "me":

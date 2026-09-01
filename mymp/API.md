@@ -76,7 +76,7 @@ Chat messages starting with `/` become commands. Built-ins (from `server/plugins
 
 ## Protocol reference
 
-All messages are JSON. Browser clients use WebSocket at `/ws`; native clients
+All messages are JSON. Script clients use WebSocket at `/ws`; native clients
 (the GTA V client) use UDP datagrams on the same port. The server replies over
 the same transport the client joined with.
 
@@ -84,7 +84,7 @@ the same transport the client joined with.
 |---|---|---|
 | `join` | C→S | `{t, name, color, native?}` |
 | `hello` | S→C | `{t, id, name, color, admin, spawn:[x,y,h], world:[w,h], hostname, maxclients}` |
-| `input` | C→S | `{t, u, d, l, r}` — 0/1 states (browser players) |
+| `input` | C→S | `{t, u, d, l, r}` — 0/1 states (script clients) |
 | `nat` | C→S | `{t, x, y, h, s, m, f, hp, ar}` — absolute state from the **GTA V client** (~10 Hz; `f`=1 on foot; hp/ar 0–100) |
 | `state` | S→C | `{t, ts, ents:[{i,k,x,y,h,s,n,c,f,d?}]}` — entities in scope (same bucket + range, capped by `sv_maxEntitiesPerPlayer`); `d` = state bag |
 | `chat` | both | `{t, id, name, msg, me?}` |

@@ -15,7 +15,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo [1/1] Starting MyMP server on 0.0.0.0:30120 ...
-echo       (players connect with MyMP-Setup.exe or the browser client)
+echo       (players connect with the MyMP GTA V client - GTA V only)
 echo.
 python server\main.py --port 30120
 echo.

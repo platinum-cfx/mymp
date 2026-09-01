@@ -1,0 +1,7 @@
+{
+  "name": "maps",
+  "description": "Custom world objects (asset-streaming lite): /addobj /delobj /objects /clearmap",
+  "author": "MyMP",
+  "version": "1.0.0",
+  "tags": ["world", "maps", "assets"]
+}

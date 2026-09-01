@@ -80,7 +80,7 @@ GTA5.exe ── MyMP.asi (ASI loader injection)
     │  4. receives the server state → spawns/moves vehicles for
     │     other players and AI bots around you
     ▼
-MyMP server (UDP 30120)  ←→  web players, other GTA clients, bots
+MyMP server (UDP 30120)  ←→  other GTA clients, script bots
 ```
 
 ## 🔧 Troubleshooting

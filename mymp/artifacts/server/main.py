@@ -4,8 +4,8 @@ MyMP — your own multiplayer platform for GTA V (server side).
 Entry point:  python3 main.py [--port 30120]
 
 Binds:
-    TCP :port  -> web client (browser / headless bot) + WebSocket /ws
-    UDP :port  -> native client transport (the GTA V client)
+    TCP :port  -> HTTP status page + WebSocket /ws (GTA client, bots)
+    UDP :port  -> GTA V client transport (state + voice)
 """
 import argparse
 import json
@@ -81,9 +81,13 @@ def main():
     ap.add_argument("--admin-host", default="0.0.0.0")
     ap.add_argument("--admin-port", type=int, default=40120)
     ap.add_argument("--no-admin-panel", action="store_true")
+    ap.add_argument("--maxclients", type=int, default=0,
+                    help="override sv_maxclients (scale testing)")
     args = ap.parse_args()
 
     cfg = load_cfg()
+    if args.maxclients > 0:
+        cfg["sv_maxclients"] = str(args.maxclients)
     world = World(cfg, log)
     plugins = PluginHost(world, log, os.path.join(BASE, "server", "plugins"))
     world.plugins = plugins
@@ -116,7 +120,7 @@ def main():
         if p is None:
             if msg.get("t") == "join":
                 world.join(msg.get("name"), msg.get("color"), ws=conn,
-                           native=bool(msg.get("native")))
+                           native=bool(msg.get("native")), lic=msg.get("lic"))
             return
         handle_net_msg(p, msg, "ws")
 
@@ -130,6 +134,11 @@ def main():
         if p:
             world.handle_voice(p, payload)
 
+    def on_udp_binary(payload, addr):
+        p = world.by_udp.get(addr)
+        if p:
+            world.handle_voice(p, payload)
+
     httpd = MyMPHTTPServer((args.host, args.port), os.path.join(BASE, "web"),
                            on_ws_open, on_ws_msg, on_ws_close,
                            info_fn=world.info, on_ws_binary=on_ws_binary)
@@ -139,11 +148,11 @@ def main():
         if p is None:
             if msg.get("t") == "join":
                 world.join(msg.get("name"), msg.get("color"), udp_addr=addr,
-                           native=bool(msg.get("native")))
+                           native=bool(msg.get("native")), lic=msg.get("lic"))
             return
         handle_net_msg(p, msg, "udp")
 
-    udp = UDPServer(args.port, udp_msg)
+    udp = UDPServer(args.port, udp_msg, on_binary=on_udp_binary)
     world.udp = udp
 
     t_http = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -198,7 +207,7 @@ def main():
 
     log("=" * 56)
     log("  MyMP server running")
-    log(f"  TCP (web + websocket): {args.host}:{args.port}")
+    log(f"  TCP (HTTP + websocket): {args.host}:{args.port}")
     log(f"  UDP (native client):   {args.host}:{args.port}")
     if not args.no_admin_panel:
         log(f"  Admin panel:           {args.admin_host}:{args.admin_port}")

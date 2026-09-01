@@ -2,22 +2,22 @@
 
 **MyMP is your own FiveM-style platform, built from scratch** — the same way
 Alt:V and GT-MP were: a custom networking protocol, a server-authoritative world
-simulation, a resource/plugin system, a browser client **and a GTA V client**
-(`MyMP.asi`, which runs inside GTA5.exe and syncs your real vehicle with the
-server).
+simulation, a resource/plugin system, and a **GTA V client** (`MyMP.asi`, which
+runs inside GTA5.exe and syncs your real vehicle with the server).
 
-It runs right now — no GTA V needed to try it:
+**GTA V only — like FiveM, there is no web game.** The game runs inside your
+legitimate copy of GTA V. The browser is used only for the server browser
+(`hub.html`) and the admin panel.
 
 ```
 cd mymp && python3 server/main.py
 ```
 
-Then open **http://localhost:30120** in any modern browser (Chrome/Edge/Firefox),
-pick a name, and hit **JOIN SERVER**. You'll drive around a shared, server-authoritative
-world with AI traffic, chat with other players, and use commands.
-
-With the GTA V client built (see `CLIENT.md`), the same server runs your actual
-GTA V game alongside the web players.
+Then join with the GTA client: run **`MyMP.exe`** (installs `MyMP.asi` +
+ASI loader into your GTA V folder and launches the game) or copy `MyMP.asi` +
+`dinput8.dll` into your GTA V folder and launch GTA V. You'll drive around a
+shared, server-authoritative world with AI traffic, chat with other players,
+and use commands.
 
 ---
 
@@ -27,9 +27,10 @@ GTA V game alongside the web players.
 # 1. Start the server (Python 3.10+, no dependencies)
 python3 server/main.py
 
-# 2. Open the web client
-#    http://localhost:30120
-#    (or http://YOUR-IP:30120 to let friends on your network join)
+# 2. Join with GTA V (the only game client — like FiveM):
+#    run release/MyMP.exe — installs the client into your GTA V folder
+#    and launches the game (or copy MyMP.asi + dinput8.dll manually).
+#    In-game: T chat · N talk (PTT) · P player list.
 
 # 3. Optional: spawn test bots to see the world feel alive
 python3 tools/headless_bot.py --count 3
@@ -115,7 +116,7 @@ Same idea as FiveM's netcode: the server owns the truth, clients send inputs.
 | `{t:"chat", id, name, msg}` / `{t:"sys", msg}` | both | chat / system messages |
 | `{t:"join"}` / `{t:"leave"}` | server → client | player list updates |
 
-Transports: **WebSocket** over TCP for browser/script clients, and a **UDP
+Transports: **WebSocket** over TCP for script/test clients, and a **UDP
 datagram** endpoint on the same port for the future native GTA V client —
 mirroring how FXServer exposes both TCP and UDP on 30120.
 

@@ -7,7 +7,7 @@
 
 ### The server — runs on any PC with Python 3.10+ (no dependencies)
 - **Authoritative world sim** at 10 Hz — server owns all state, clients send inputs
-- **Two transports on one port (30120):** WebSocket for browser players, UDP for the GTA V client
+- **Two transports on one port (30120):** WebSocket for script/test clients, UDP for the GTA V client
 - **Live features, all integration-tested (43 tests passing):**
   - Players, AI traffic, chat, whispers, commands
   - **Aces/permissions** (FiveM-style ACL)
@@ -20,11 +20,11 @@
 - **Admin panel (port 40120)** — the txAdmin analogue: live console, kick, announce, live settings, log stream, token auth
 - **Server browser** — every server exposes `/info.json`; `hub.html` polls and shows live cards with JOIN buttons
 
-### The browser client — playable immediately, no install
-- Canvas top-down world: roads, buildings, AI cars, players on foot, minimap, speedo, chat, state-bag tags
-- **Try it now:** open the LIVE PREVIEW (port 30120) → pick a name → JOIN SERVER
+### GTA V only (like FiveM) — there is no web game
+- The game runs inside your GTA V copy via `MyMP.asi`; the browser is used only
+  for the server browser (`hub.html`) and the admin panel (`panel.html`)
 
-### The GTA V client — complete source, builds on Windows in one command
+### The GTA V client — prebuilt + complete source
 - `client/` → builds **MyMP.asi** with `build.ps1` (needs free Visual Studio Build Tools)
 - Runs inside GTA5.exe via an ASI loader (launcher installs it automatically)
 - Discovers the game's native table at runtime (no hardcoded offsets)
@@ -88,7 +88,7 @@ UDP. The admin panel manages it all. Everyone shares one world.
 
 | You want… | Do this |
 |---|---|
-| **Play now (browser)** | LIVE PREVIEW → JOIN SERVER (or `python server/main.py` → localhost:30120) |
+| **Play in GTA V** | run `release/MyMP.exe` (installs client + launches GTA V) → join your server |
 | **Run your own server** | install Python → `Run MyMP Server.bat` |
 | **Manage it** | http://localhost:40120 → token in `data/admin_token.txt` |
 | **GTA V client** | on Windows: free VS Build Tools → `client/build.ps1` → `launcher/Install & Launch MyMP.bat` (finds GTA V, installs ASI loader, launches) |
@@ -105,11 +105,11 @@ UDP. The admin panel manages it all. Everyone shares one world.
 
 | FiveM piece | MyMP | |
 |---|---|---|
-| Installer exe (double-click → installed) | `MyMP-Setup.exe` | ✅ |
+| Installer exe (double-click → installed) | `MyMP.exe` (self-extracting: client + ASI loader inside) | ✅ |
 | Server artifacts (download → run fxserver) | `MyMP-Server-Artifacts.zip` + `run_server.bat` | ✅ |
 | Own server console + `server.cfg` + resources | Python server + plugins + cfg | ✅ |
-| Own GTA client that joins your server | `MyMP.asi` (cross-compiled, 45 natives) | ✅ |
-| GUI launcher with server browser | **MyMP-Launcher.exe** (Win32 GUI: master-list browser → pick server → one-click launch) | ✅ |
+| Own GTA client that joins your server | `MyMP.asi` (prebuilt PE32+, 61 natives) | ✅ |
+| GUI launcher with server browser | built into **MyMP.exe** (Win32: master-list browser → pick server → one-click launch) | ✅ |
 | Master server list | `server/registry.py` (:30130 hub + JSON) + `sv_masterlist` announce | ✅ |
 
 ### Does it WORK like FiveM? (the feature surface)
@@ -120,17 +120,17 @@ UDP. The admin panel manages it all. Everyone shares one world.
 | Resources / scripts / events | ✅ | plugins (7: accounts, admin, chat, freeroam, spawn, statebags, vehicles) | ✅ |
 | Permissions (aces/principals) | ✅ | ✅ | ✅ |
 | State bags | ✅ | ✅ (tested) | ✅ |
-| Persistence / accounts | ✅ | name-keyed; license IDs next | ✅ |
+| Persistence / accounts | ✅ | license-ID-keyed (Cfx-style, per install) | ✅ |
 | Admin panel | txAdmin | panel :40120 | ✅ |
 | GTA client: drive, see other cars | ✅ | ✅ smooth (interpolation) | ✅ |
 | GTA client: on-foot players + hp/armour | ✅ | ✅ | ✅ |
 | GTA client: weapons | ✅ | ✅ /weapon (10) | ✅ |
-| In-game chat | ✅ full | ⏳ read-only display; typing next | ⏳ |
-| Death/respawn & damage events | ✅ | ⏳ next | ⏳ |
-| Asset streaming (custom maps/cars) | ✅ | ⏳ later (biggest lift) | ⏳ |
-| Voice chat | ✅ | ✅ **proximity voice (web client)** — mic → server routes by distance, volume fades; Opus + GTA-client WASAPI next |
-| Scale: players per server | 2,048 (OneSync Infinity) | 32 now → 100s with budgets | ⏳ |
-| Native coverage in client | ~6,000 | 45 (+ health/armour/weapons) | ⏳ |
+| In-game chat | ✅ full | ✅ full (T to type) | ✅ |
+| Death/respawn & damage events | ✅ | ✅ end-to-end | ✅ |
+| Asset streaming (custom maps/cars) | ✅ | ✅ map objects (lite); car streaming later | ⏳ |
+| Voice chat | ✅ | ✅ **proximity voice in GTA V** — WASAPI mic (hold N), Opus, distance-faded |
+| Scale: players per server | 2,048 (OneSync Infinity) | 120 tested (`tests/scale.py`) | ✅ |
+| Native coverage in client | ~6,000 | 61 (vehicles, weapons, objects, chat) | ⏳ |
 
 **Verdict (honest):**
 - **Looks:** ~**75%** there. Double-click an exe, it installs into your GTA folder
@@ -301,10 +301,8 @@ You asked about V:MP (V-Multiplayer). Good news this time:
 - **Custom map objects (asset-streaming lite)** — `/addobj`, `/delobj`, `/objects`, `/clearmap`; persisted, rendered in web + GTA client
 - **In-game player list** — press `P` in GTA V for a live name/HP overlay
 - **Scale-tested to 120 concurrent players** — `tests/scale.py`: 120/120 joined, every bot sustained ~15 state frames/s under full load, 0 errors (caught + fixed a dict-mutation race in state broadcast)
-- **In-game voice in the GTA V client** — WASAPI mic capture (push-to-talk on `N`), Opus + Ogg framing built into `MyMP.asi` (bundled libopus, BSD-3), per-speaker decode + mixed playback; server routes voice to both WebSocket (browser) and UDP (GTA client) players; GTA and browser players talk to each other
-- **Opus voice in the browser** — voice packets encode with libopus (wasm, ~44 B per 20 ms frame vs ~640 B raw PCM); voice frames carry a 4-byte sender id so each speaker gets its own decode stream; raw-PCM fallback intact
+- **In-game voice in the GTA V client** — WASAPI mic capture (push-to-talk on `N`), Opus + Ogg framing built into `MyMP.asi` (bundled libopus, BSD-3), per-speaker decode + mixed playback; voice frames carry a 4-byte sender id so each speaker gets its own decode stream
 - **Persistence keyed by license identifier** (CfX-style, generated per install, `HKCU\Software\MyMP`) — name fallback for clients that send none
-- **Web client is 2D top-down** — it's the browser companion, not a GTA renderer
 
 ---
 

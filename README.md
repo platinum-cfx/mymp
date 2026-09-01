@@ -25,10 +25,10 @@ your own dedicated server, your friends double-click one exe, and your real
 GTA V copies (legitimately owned, modded by an ASI plugin) are synced together:
 everyone drives, talks and plays in the same world **inside GTA V itself**.
 
-The browser map you may have seen in screenshots is *not* the game — it is the
-companion (server browser + lightweight lobby view, like FiveM's server list).
-The actual game is `MyMP.asi` running inside GTA5.exe: your real vehicle, ped,
-position, health, weapons and voice, synced to everyone on the server.
+**GTA V only — like FiveM, there is no web game.** The browser is used only for
+the server browser (hub) and the admin panel. The actual game is `MyMP.asi`
+running inside GTA5.exe: your real vehicle, ped, position, health, weapons and
+voice, synced to everyone on the server.
 
 You run the server, your friends double-click one exe, and everyone drives around
 the same world together.
@@ -59,7 +59,7 @@ licenses kept on file.
 | In-game chat (**T** to type, Enter sends, Esc closes) with on-screen log | ✅ |
 | Health / armour / weapon sync (61 verified natives, crossmap-verified hashes) | ✅ |
 | **Combat**: damage reporting → server-routed → death → 4 s respawn + kill feed | ✅ |
-| **Proximity voice chat — in GTA V and browser**: WASAPI mic (hold `N`), Opus codec, distance-faded, GTA↔browser compatible | ✅ |
+| **Proximity voice chat — in GTA V**: WASAPI mic (hold `N`), Opus codec, distance-faded | ✅ |
 | State bags (`world.set_state` / `get_state`) synced to nearby players | ✅ |
 | Permissions (**aces / principals** — same model as FiveM's ACL) | ✅ |
 | Events (client↔server) + server-side event bus | ✅ |
@@ -68,7 +68,6 @@ licenses kept on file.
 | **Master list** + server browser (registry service + hub page) | ✅ |
 | **MyMP.exe** — one self-extracting file: installs the client into GTA, writes config, launches the game | ✅ |
 | Server artifacts zip — download, edit `server.cfg`, run (FXServer-style) | ✅ |
-| Web client (browser, 2D world) — try the server with zero install | ✅ |
 
 ---
 
@@ -89,7 +88,7 @@ licenses kept on file.
 2. Unzip → edit `server.cfg` (hostname, max players, aces) → double-click
    `run_server.bat` (needs Python 3.10+).
 3. Server console on **:30120** (TCP+UDP), admin panel on **:40120**,
-   browser client at `http://<your-ip>:30120`.
+   status page at `http://<your-ip>:30120` (the game runs in GTA V only).
 
 ### Option C — from source
 
@@ -98,7 +97,7 @@ git clone https://github.com/platinum-cfx/mymp.git
 cd mymp/mymp
 python3 server/main.py            # start the server (no dependencies)
 python3 tools/headless_bot.py --count 3   # optional: AI traffic
-# open http://localhost:30120     # web client
+# open http://localhost:30120  # server status page (no web game — GTA V only)
 ```
 
 ---
@@ -108,7 +107,7 @@ python3 tools/headless_bot.py --count 3   # optional: AI traffic
 ```
 ┌─────────────────────┐        ┌──────────────────────────────┐
 │  MyMP.exe (Windows) │        │  MyMP Server (Python)        │
-│  · Server Browser   │        │  TCP :30120  web + WebSocket │
+│  · Server Browser   │        │  TCP :30120  HTTP + WebSocket │
 │  · installs .asi    │        │  UDP :30120  native client   │
 │  · launches GTA V   │        │  · World (server-authoritative)
 └─────────┬───────────┘        │  · Plugins = resources       │
@@ -123,12 +122,8 @@ python3 tools/headless_bot.py --count 3   # optional: AI traffic
 │  · interpolation    │        │  master list + hub page      │
 │  · chat overlay     │        └──────────────────────────────┘
 └─────────────────────┘
-        ▲                    ┌──────────────────────────────┐
-        └────────────────────│  Browser client (web/)       │
-                             │  join via WebSocket, voice,  │
-                             │  minimap, chat, state tags   │
-                             └──────────────────────────────┘
 ```
+
 
 **The sync model** (same shape as FiveM's OneSync / alt:V):
 - The **server owns the world**. Clients report their state (~10 Hz), the server
@@ -176,7 +171,7 @@ mymp/
 │   ├── launcher/        MyMP.exe source (self-extracting GUI launcher)
 │   ├── build.ps1        Windows build script (VS Build Tools)
 │   └── MyMP.asi         the built client (also embedded in MyMP.exe)
-├── web/                 browser client (index.html) + admin panel (panel.html)
+├── web/                 server status page + server-browser hub (hub.html) + admin panel UI
 ├── tools/               native-hash generator, headless test bot
 ├── tests/               regression.py (9) · health.py (5) · voice.py (4)
 ├── release/             MyMP.exe (single-file client) + mymp.ini + TESTING.md
@@ -275,7 +270,7 @@ python3 voice.py         # 4/4 — proximity voice routing, volume fade
   dispute that took down alt:V and RAGE:MP in 2026.
 - Third-party code we do use is **permissively licensed and kept with its
   license + attribution** in `mymp/reference/`:
-  - **opus-recorder** (MIT) — libopus compiled to WebAssembly for browser voice (`web/vendor/opus/`)
+  - **opus-recorder** (MIT) — reference Opus/WebAssembly decoder, used only by the voice-compatibility tests (`web/vendor/opus/`)
   - **GTA:Network** (MIT) — sync/interpolation design, client/server reference
   - **VMultiplayer / V:MP** (Apache-2.0) — GUI/input-hook blueprints
   - **alt:V example resources & ecosystem** (MIT) — maps, types, docs
@@ -294,15 +289,12 @@ python3 voice.py         # 4/4 — proximity voice routing, volume fade
   license, so your colour/vehicle/position follow your install, not your name
 - **Asset streaming (lite) — custom map objects** — `/addobj <model> [x y]`,
   `/delobj <id>`, `/objects`, `/clearmap`; props persist to
-  `data/map_objects.json` and render in the web client *and* in GTA V
+  `data/map_objects.json` and render in GTA V
 - **In-game player list** — press `P` in GTA V for a live name/HP overlay
-- **Opus voice** — proximity voice encodes with libopus: the browser uses a
-  WebAssembly build (`web/vendor/opus`, MIT opus-recorder), and **the GTA V
-  client now has real in-game voice too** — WASAPI mic capture (hold `N` to
+- **Opus voice in GTA V** — proximity voice: WASAPI mic capture (hold `N` to
   talk), Opus/Ogg encoding in the ASI (bundled libopus, BSD-3), per-speaker
   decoding and mixed playback through your speakers. A 20 ms frame drops from
-  ~640 to ~44 bytes (~14x less bandwidth). GTA players and browser players
-  hear each other — byte-compatible, proven by tests.
+  ~640 to ~44 bytes (~14x less bandwidth). GTA V only — there is no web game.
 - **Scale-tested to 120 concurrent players** — `tests/scale.py` (caught and
   fixed a real dict-mutation race in state broadcast)
 

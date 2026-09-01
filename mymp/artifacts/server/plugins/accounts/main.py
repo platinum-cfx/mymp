@@ -1,7 +1,8 @@
 """Accounts plugin: persistence — players keep colour, vehicle and position.
 
-Accounts are stored in data/accounts.json, keyed by player name
-(the MyMP analogue of Cfx license identifiers for now). Saves:
+Accounts are stored in data/accounts.json, keyed by the player's install
+license identifier (like Cfx/FiveM license identifiers). Clients without a
+license fall back to their name. Saves:
   - position + heading (on leave and every 30s)
   - colour, last vehicle model
 Restored on join (spawn point, colour, vehicle via the setVehicle event).
@@ -35,10 +36,16 @@ def setup(ctx, world, log):
         except Exception as e:
             log(f"accounts: save failed: {e}")
 
+    def _key(player):
+        return player.lic or player.name  # license identifier (CfX-style) else name
+
     def on_join(player):
-        acc = accounts.get(player.name)
+        key = _key(player)
+        acc = accounts.get(key)
         if not acc:
-            acc = accounts[player.name] = {"created": time.time()}
+            acc = accounts[key] = {"created": time.time()}
+        acc["name"] = player.name
+        save()  # persist the account (new or updated) right away
         player.acct = acc
         if isinstance(acc.get("color"), str):
             player.ent.color = acc["color"]
@@ -54,7 +61,7 @@ def setup(ctx, world, log):
             world.send_event(player, "setVehicle", {"model": acc["vehicle"]})
 
     def on_leave(player):
-        acc = player.acct or accounts.setdefault(player.name, {})
+        acc = player.acct or accounts.setdefault(_key(player), {})
         acc["x"], acc["y"], acc["h"] = (round(player.ent.x, 1),
                                         round(player.ent.y, 1),
                                         round(player.ent.heading, 3))
@@ -63,14 +70,14 @@ def setup(ctx, world, log):
         save()
 
     def on_vehicle_changed(player, model):
-        acc = player.acct or accounts.setdefault(player.name, {})
+        acc = player.acct or accounts.setdefault(_key(player), {})
         acc["vehicle"] = model
         save()
 
     def on_tick(now):
         if int(now) % 30 == 0:
-            for p in world.players.values():
-                acc = p.acct or accounts.setdefault(p.name, {})
+            for p in list(world.players.values()):
+                acc = p.acct or accounts.setdefault(_key(p), {})
                 acc["x"], acc["y"], acc["h"] = (round(p.ent.x, 1),
                                                 round(p.ent.y, 1),
                                                 round(p.ent.heading, 3))
@@ -83,7 +90,7 @@ def setup(ctx, world, log):
             world.send(player, {"t": "sys", "msg": "Account saved."})
             return True
         if cmd == "resetpos":
-            acc = accounts.get(player.name)
+            acc = accounts.get(_key(player))
             if acc:
                 acc.pop("x", None)
                 acc.pop("y", None)

@@ -404,3 +404,27 @@ it has the last missing piece: **real in-game voice**.
   0.522), and voice.py grew to 14 checks including native-UDP -> WS and
   WS -> native-UDP end-to-end. `MyMP.asi` is now 958 KB; `MyMP.exe` rebuilt
   (4,775,136 B).
+
+## Chapter 17 — GTA V only: the web (2D browser world) client removed (Sep 1, 2026)
+
+Owner directive: *"mymp should only be working with gta v — nothing else, just
+like FiveM."* The browser 2D world client (canvas top-down game served at
+`http://server:30120`, join-in-browser, browser mic voice) was removed from the
+repository and the server.
+
+What changed:
+- `web/index.html` is no longer a game. It is a plain server-status page
+  (hostname, player count, "ONLINE") with join instructions — no canvas, no
+  gameplay, nothing playable in a browser.
+- Browser mic voice is gone with it. Voice is GTA V only: WASAPI mic +
+  Opus in `MyMP.asi` (bundled libopus), exactly like FiveM's in-game voice.
+- The server browser (`hub.html`, the FiveM-style master list) and the admin
+  panel (`panel.html`) remain — they are management/discovery, not games.
+- `web/vendor/opus/` stays only as a test fixture: the voice-compat tests
+  (`tests/opus_roundtrip.js`, `tests/native_browser_voice.js`) use it as an
+  independent reference decoder to validate the GTA client's Ogg/Opus framing.
+- Docs rewritten to lead with "GTA V only, like FiveM": README (root +
+  platform), STATUS, server docstring, CLIENT/API notes.
+
+The product is now strictly: **MyMP.exe → installs the ASI into your GTA V →
+you play inside GTA V**. Nothing else, just like FiveM.

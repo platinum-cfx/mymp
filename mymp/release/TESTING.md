@@ -48,7 +48,7 @@ name/vehicle, and launches GTA V. (The old manual steps below still work.)
 | A log file appears: `GTA V folder\mymp.log` | first lines: "MyMP client loaded from …", "Native table discovered.", "Game ready — PLAYER_PED_ID OK.", "Joining 127.0.0.1:30120 as …", "Connected to MyMP! Spawning your vehicle...", "Own vehicle spawned." |
 | Your chosen vehicle spawns near you | check `mymp.ini` → `[player] vehicle=adder` (any GTA V model) |
 | Server shows you joined | server console: `[+] YourName joined (id=…, udp, bucket 0)` |
-| Browser players see your car | open http://localhost:30120 in a second browser on the same PC |
+| Another GTA player sees your car | join from a second PC running the GTA client (or watch the server log for your 10 Hz state packets) |
 
 **Report back to me:** paste the contents of `mymp.log` and tell me
 1. did the vehicle spawn?
@@ -88,8 +88,7 @@ Once connected, in the GTA chat (press **T**):
 
 ## Honest limits (v1)
 
-- **No on-screen chat input yet** — chat is read-only in the client for now
-  (browser client has full chat).
-- **Vehicle/ped sync only** — no combat/death sync yet.
+- **Chat input works** — press `T` to type, `N` push-to-talk (configurable in `mymp.ini`).
+- **Combat/death sync works end-to-end** — damage routes through the server to the victim.
 - Tested build targets current GTA V (Legacy/Enhanced); a game update may
   need a pattern refresh — that's exactly what your test will tell us.

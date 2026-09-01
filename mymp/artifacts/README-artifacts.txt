@@ -18,14 +18,14 @@ FiveM's "server artifacts" and running FXServer.exe.
 | `server.cfg` | hostname, max players, aces/principals (edit me) |
 | `server/` | the MyMP server code (game, netcode, admin panel, plugins = resources) |
 | `server/plugins/` | resources: accounts, admin, chat, freeroam, spawn, statebags, vehicles |
-| `web/` | the in-browser client (http://<server>:30120) + admin panel |
+| `web/` | server status page + server browser + admin panel (GTA V only — no web game) |
 | `data/` | created at first run: accounts, admin token |
 
 ## Making it a public server
 
 - Edit `server.cfg`: `sv_hostname`, `sv_maxclients`.
 - Port-forward TCP+UDP **30120** (and 40120 for the panel) on your router.
-- Players run **MyMP-Setup.exe** and point it at your IP:30120.
+- Players run **MyMP.exe** (installs the client into GTA V) and point it at your IP:30120.
 
 ## Note
 

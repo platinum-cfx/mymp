@@ -4,8 +4,8 @@ MyMP — your own multiplayer platform for GTA V (server side).
 Entry point:  python3 main.py [--port 30120]
 
 Binds:
-    TCP :port  -> web client (browser / headless bot) + WebSocket /ws
-    UDP :port  -> native client transport (the GTA V client)
+    TCP :port  -> HTTP status page + WebSocket /ws (GTA client, bots)
+    UDP :port  -> GTA V client transport (state + voice)
 """
 import argparse
 import json
@@ -207,7 +207,7 @@ def main():
 
     log("=" * 56)
     log("  MyMP server running")
-    log(f"  TCP (web + websocket): {args.host}:{args.port}")
+    log(f"  TCP (HTTP + websocket): {args.host}:{args.port}")
     log(f"  UDP (native client):   {args.host}:{args.port}")
     if not args.no_admin_panel:
         log(f"  Admin panel:           {args.admin_host}:{args.admin_port}")

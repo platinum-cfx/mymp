@@ -212,6 +212,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             ctype = "text/html; charset=utf-8"
         elif full.endswith(".js"):
             ctype = "application/javascript"
+        elif full.endswith(".wasm"):
+            ctype = "application/wasm"
         elif full.endswith(".css"):
             ctype = "text/css"
         else:
@@ -231,8 +233,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 class UDPServer:
     """UDP datagram transport for native clients (mirrors FiveM's UDP endpoint)."""
 
-    def __init__(self, port: int, on_msg):
+    def __init__(self, port: int, on_msg, on_binary=None):
         self.on_msg = on_msg  # fn(dict, addr)
+        self.on_binary = on_binary  # fn(bytes, addr) — voice datagrams
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(("0.0.0.0", port))
@@ -247,6 +250,10 @@ class UDPServer:
                 continue
             except OSError:
                 break
+            if data and data[0:1] == b"\x56" and self.on_binary:
+                # native-client voice datagram: [0x56][0x4F][ogg page]
+                self.on_binary(data[1:], addr)
+                continue
             try:
                 msg = json.loads(data.decode("utf-8"))
                 if isinstance(msg, dict):
@@ -258,6 +265,12 @@ class UDPServer:
         try:
             self.sock.sendto(
                 json.dumps(obj, separators=(",", ":")).encode("utf-8"), addr)
+        except OSError:
+            pass
+
+    def send_binary(self, addr, data: bytes):
+        try:
+            self.sock.sendto(data, addr)
         except OSError:
             pass
 
