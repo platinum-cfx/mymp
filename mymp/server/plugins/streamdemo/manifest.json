@@ -1,0 +1,14 @@
+{
+  "name": "Stream Demo",
+  "description": "Shows asset streaming: custom model files served to GTA V clients like FiveM stream/ folders.",
+  "author": "MyMP",
+  "version": "1.0.0",
+  "tags": [
+    "core",
+    "demo"
+  ],
+  "stream": [
+    "stream/prop_demo.yft",
+    "stream/prop_demo.ytd"
+  ]
+}

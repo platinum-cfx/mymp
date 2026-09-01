@@ -291,6 +291,18 @@ class World:
             return None, True           # 404
         return body, True
 
+    def serve_stream(self, resource, file, secret):
+        """HTTP handler for /stream/<resource>/<file>?t=<secret> —
+        FiveM-style streamed assets (models, maps, sounds)."""
+        p = next((pl for pl in self.players.values()
+                  if pl.script_secret == secret), None)
+        if p is None:
+            return None, False          # 403
+        body = self.plugins.stream(resource, file)
+        if body is None:
+            return None, True           # 404
+        return body, True
+
     def emit(self, event, *args):
         """Server-side event bus for plugins (e.g. 'vehicleChanged')."""
         for fn in self.plugins.hooks.get("server:" + event, []):
@@ -312,6 +324,7 @@ class World:
             "hostname": self.cfg.get("sv_hostname", "MyMP"),
             "maxclients": int(self.cfg.get("sv_maxclients", 32)),
             "scripts": self.plugins.scripts_list(),
+            "streams": self.plugins.streams_list(),
             "secret": p.script_secret,
         })
 

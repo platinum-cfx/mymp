@@ -37,6 +37,8 @@ class PluginHost:
         self.plugins = {}      # name -> {"mod": module, "manifest": dict}
         self.client_scripts = {}  # resource name -> [file, ...]
         self._script_cache = {}   # (resource, file) -> bytes
+        self.stream_files = {}    # resource name -> {relpath: size} (stream/)
+        self._stream_cache = {}   # (resource, relpath) -> bytes
         self._timers = []
 
     def register(self, plugin_name, fn_name, fn):
@@ -67,6 +69,24 @@ class PluginHost:
                         and str(f).endswith(".lua")]
                 if keep:
                     self.client_scripts[name] = keep
+            # streamed assets: everything under stream/ plus manifest "stream"
+            sfiles = set()
+            if isinstance(manifest.get("stream"), list):
+                sfiles.update(str(x) for x in manifest["stream"])
+            sdir = os.path.join(path, "stream")
+            if os.path.isdir(sdir):
+                for root, _, fs in os.walk(sdir):
+                    for f in fs:
+                        sfiles.add(os.path.relpath(os.path.join(root, f),
+                                                   path).replace(os.sep, "/"))
+            keep_s = {}
+            for rel in sorted(sfiles):
+                rel = rel.replace("\\", "/").lstrip("/")
+                pth = self._safe_join(path, rel)
+                if pth and os.path.isfile(pth):
+                    keep_s[rel] = os.path.getsize(pth)
+            if keep_s:
+                self.stream_files[name] = keep_s
             try:
                 spec = importlib.util.spec_from_file_location(
                     f"mymp_plugin_{name}", main)
@@ -111,6 +131,36 @@ class PluginHost:
                 for n, fs in sorted(self.client_scripts.items())]
 
     @staticmethod
+    def _safe_join(base, rel):
+        """Join base + rel, rejecting traversal (..) and absolute paths."""
+        parts = rel.split("/")
+        if any(p in ("..", "") for p in parts) or rel.startswith("/"):
+            return None
+        return os.path.join(base, *parts)
+
+    def stream(self, resource, file):
+        """Return bytes of a streamed asset (FiveM-style stream/ folder)."""
+        if resource not in self.stream_files or file not in self.stream_files[resource]:
+            return None
+        key = (resource, file)
+        if key not in self._stream_cache:
+            pth = self._safe_join(os.path.join(self.plugin_dir, resource), file)
+            if not pth:
+                return None
+            try:
+                with open(pth, "rb") as f:
+                    self._stream_cache[key] = f.read()
+            except OSError:
+                return None
+        return self._stream_cache[key]
+
+    def streams_list(self):
+        return [{"name": n,
+                 "files": [{"path": p, "size": sz}
+                           for p, sz in sorted(fs.items())]}
+                for n, fs in sorted(self.stream_files.items())]
+
+    @staticmethod
     def _read_manifest(path):
         p = os.path.join(path, "manifest.json")
         if not os.path.isfile(p):
@@ -121,7 +171,7 @@ class PluginHost:
                 m = json.load(f)
             return {k: m.get(k, "") for k in
                     ("name", "description", "author", "version", "tags",
-                     "client_scripts")}
+                     "client_scripts", "stream")}
         except Exception:
             return {"name": os.path.basename(path), "version": "0.0.0",
                     "author": "?", "description": ""}
