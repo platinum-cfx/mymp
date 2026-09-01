@@ -81,9 +81,13 @@ def main():
     ap.add_argument("--admin-host", default="0.0.0.0")
     ap.add_argument("--admin-port", type=int, default=40120)
     ap.add_argument("--no-admin-panel", action="store_true")
+    ap.add_argument("--maxclients", type=int, default=0,
+                    help="override sv_maxclients (scale testing)")
     args = ap.parse_args()
 
     cfg = load_cfg()
+    if args.maxclients > 0:
+        cfg["sv_maxclients"] = str(args.maxclients)
     world = World(cfg, log)
     plugins = PluginHost(world, log, os.path.join(BASE, "server", "plugins"))
     world.plugins = plugins

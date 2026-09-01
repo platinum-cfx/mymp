@@ -300,6 +300,7 @@ You asked about V:MP (V-Multiplayer). Good news this time:
 - **Combat/death/respawn now sync end-to-end** (damage → death → 4s respawn); GTA-client-side death camera polish is next
 - **Custom map objects (asset-streaming lite)** — `/addobj`, `/delobj`, `/objects`, `/clearmap`; persisted, rendered in web + GTA client
 - **In-game player list** — press `P` in GTA V for a live name/HP overlay
+- **Scale-tested to 120 concurrent players** — `tests/scale.py`: 120/120 joined, every bot sustained ~15 state frames/s under full load, 0 errors (caught + fixed a dict-mutation race in state broadcast)
 - **Persistence keyed by license identifier** (CfX-style, generated per install, `HKCU\Software\MyMP`) — name fallback for clients that send none
 - **Web client is 2D top-down** — it's the browser companion, not a GTA renderer
 

@@ -76,7 +76,7 @@ def setup(ctx, world, log):
 
     def on_tick(now):
         if int(now) % 30 == 0:
-            for p in world.players.values():
+            for p in list(world.players.values()):
                 acc = p.acct or accounts.setdefault(_key(p), {})
                 acc["x"], acc["y"], acc["h"] = (round(p.ent.x, 1),
                                                 round(p.ent.y, 1),

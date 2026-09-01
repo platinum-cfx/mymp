@@ -467,7 +467,7 @@ class World:
     def _broadcast_state(self):
         now = time.time()
         budget = int(self.cfg.get("sv_maxEntitiesPerPlayer", 48))
-        for p in self.players.values():
+        for p in list(self.players.values()):
             if not p.greeted:
                 continue
             ents = []
@@ -518,7 +518,7 @@ class World:
         within VOICE_RANGE). Volume byte scales with distance."""
         if not p.greeted:
             return
-        for t in self.players.values():
+        for t in list(self.players.values()):
             if t is p or not t.greeted or t.bucket != p.bucket or t.ent.dead:
                 continue
             dx = t.ent.x - p.ent.x
@@ -535,7 +535,7 @@ class World:
         budget (OneSync Infinity-style population management). Players are
         always included; AI is prioritised by distance."""
         out = []
-        for p in self.players.values():
+        for p in list(self.players.values()):
             e = p.ent
             if p.bucket != bucket:
                 continue  # routing bucket: different instance = invisible

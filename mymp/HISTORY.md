@@ -358,3 +358,12 @@ Also this round: regression suite grew to 13 checks (license echo, same-license
 join, license-keyed account file, map-object broadcast) — all pass, plus 5
 health and 4 voice tests. `MyMP.exe` rebuilt (4,321,504 B) with the new
 `MyMP.asi` embedded.
+
+**Scale test** (`tests/scale.py`): 120 headless bots joined a server with
+`--maxclients 160` in 35 s; under 15 s of full load every bot sustained
+~15 state frames/s, zero starvation, zero errors, server never dropped.
+The test caught a real concurrency bug — a player joining mid-broadcast
+mutated the players dict during iteration (`RuntimeError: dictionary changed
+size during iteration`) — fixed by snapshot iteration in `_broadcast_state`,
+`_nearby`, voice routing, accounts tick and the /who command. A `--maxclients`
+CLI override was added to the server for load testing.
