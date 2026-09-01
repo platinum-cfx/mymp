@@ -23,6 +23,7 @@
 #include "natives.h"
 #include "net.h"
 #include "scriptthread.h"
+#include "voice_audio.h"
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "psapi.lib")
@@ -43,6 +44,8 @@ struct Config {
     std::string vehicle = "adder";
     std::string license;
     int r = 255, g = 159, b = 28;  // default orange
+    bool voiceEnabled = true;      // in-game voice (WASAPI + Opus)
+    char pttKey = 'N';             // push-to-talk key (hold to talk)
 };
 Config g_cfg;
 std::string g_gameDir;
@@ -148,6 +151,10 @@ void loadConfig() {
                 g_cfg.b = (int)strtol(v.substr(5, 2).c_str(), nullptr, 16);
             }
             else if (k == "license") g_cfg.license = v;
+        } else if (section == "voice") {
+            if (k == "enabled") g_cfg.voiceEnabled = v != "0";
+            else if (k == "pttkey" && !v.empty())
+                g_cfg.pttKey = (char)toupper(v[0]);
         }
     }
     // install license identifier (Cfx-style): generate once, persist, and the
@@ -202,7 +209,13 @@ std::map<uint32_t, uint32_t> g_remoteObjs;  // server object id -> game object h
 std::map<uint32_t, std::string> g_remoteNames;  // id -> name (player list overlay)
 std::map<uint32_t, int> g_remoteHp;             // id -> hp (player list overlay)
 bool g_playerList = false;
+bool g_voiceTalking = false;   // PTT held this frame
+bool g_voiceHintShown = false;
 UdpSocket g_sock;
+
+static void voiceSend(const uint8_t* data, size_t len) {
+    g_sock.send(std::string((const char*)data, len));  // safe on closed socket
+}
 
 // ---- in-game chat (FiveM-style: T opens, type, Enter sends, Esc closes) ----
 uint32_t g_myId = 0;
@@ -821,6 +834,11 @@ void clientTick() {
     // --- drain incoming ---
     std::string data;
     while (g_sock.recv(data)) {
+        if (!data.empty() && (uint8_t)data[0] == 0x56) {
+            // in-game voice datagram: [0x56][sid:4][vol:1][payload]
+            voiceAudioFeed((const uint8_t*)data.data(), data.size());
+            continue;
+        }
         Json m;
         if (m.parse(data)) handleMessage(m);
     }
@@ -830,7 +848,19 @@ void clientTick() {
         chatDisplay();
         pollPlayerList();
         playerListDisplay();
+        // push-to-talk (skip while typing in chat)
+        g_voiceTalking = g_cfg.voiceEnabled && !g_chatOpen &&
+                         (GetAsyncKeyState(g_cfg.pttKey) & 0x8000) != 0;
+        voiceAudioSetTalking(g_voiceTalking);
+        if (g_cfg.voiceEnabled && !g_voiceHintShown) {
+            g_voiceHintShown = true;
+            g_chatLog.push_back("Voice ready — hold " +
+                                std::string(1, g_cfg.pttKey) + " to talk (mymp.ini [voice]).");
+            if (g_chatLog.size() > 6) g_chatLog.pop_front();
+        }
     }
+    // HUD: talking indicator (top-left, below the status line)
+    if (g_voiceTalking) drawTextLine("TALKING - " + std::string(1, g_cfg.pttKey) + " released", 0.07f);
     // --- report own state at 10 Hz ---
     uint64_t now = GetTickCount64();
     if (g_joined && now - lastReport >= 100) {
@@ -925,6 +955,11 @@ void clientLoop() {
     g_sock.send(msgJoin());
     logLine("Joining " + g_cfg.host + ":" + std::to_string(g_cfg.port) + " as " + g_cfg.name);
 
+    if (g_cfg.voiceEnabled) {
+        voiceAudioInit(voiceSend);
+        logLine(std::string("Voice ON — hold ") + g_cfg.pttKey + " to talk (mymp.ini [voice] to change).");
+    }
+
     // run inside a GTA script thread when possible — several natives
     // (REQUEST_MODEL, CREATE_VEHICLE…) need the game's script context
     if (mymp::installScriptTick(clientTick)) {
@@ -938,6 +973,7 @@ void clientLoop() {
             Sleep(100);
         }
     }
+    if (g_cfg.voiceEnabled) voiceAudioShutdown();
     g_sock.close();
     logLine("Client stopped.");
 }

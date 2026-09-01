@@ -134,6 +134,11 @@ def main():
         if p:
             world.handle_voice(p, payload)
 
+    def on_udp_binary(payload, addr):
+        p = world.by_udp.get(addr)
+        if p:
+            world.handle_voice(p, payload)
+
     httpd = MyMPHTTPServer((args.host, args.port), os.path.join(BASE, "web"),
                            on_ws_open, on_ws_msg, on_ws_close,
                            info_fn=world.info, on_ws_binary=on_ws_binary)
@@ -147,7 +152,7 @@ def main():
             return
         handle_net_msg(p, msg, "udp")
 
-    udp = UDPServer(args.port, udp_msg)
+    udp = UDPServer(args.port, udp_msg, on_binary=on_udp_binary)
     world.udp = udp
 
     t_http = threading.Thread(target=httpd.serve_forever, daemon=True)

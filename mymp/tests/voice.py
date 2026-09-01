@@ -124,6 +124,52 @@ oside = _st.unpack("<I", of[:4])[0]
 check("opus frame keeps sender id", oside == hb["id"])
 check("opus frame has marker + intact page", of[5] == 0x4F and of[6:] == OPUS_PAGE)
 
+# ---- native GTA client over UDP: join, then voice both ways ----
+import socket as _sk
+u1 = _sk.socket(_sk.AF_INET, _sk.SOCK_DGRAM); u1.settimeout(6)
+u1.sendto(json.dumps({"t": "join", "name": "UDP-Guy", "color": "#ffab40", "native": 1}).encode(), (HOST, PORT))
+u1h = None
+end = time.time() + 6
+while time.time() < end and not u1h:
+    try:
+        m = json.loads(u1.recv(65535).decode())
+        if m.get("t") == "hello": u1h = m
+    except socket.timeout:
+        break
+check("UDP native client joins", u1h is not None)
+
+# place UDP-Guy next to Admin (Admin still at ax+900,ay+900 from earlier... move back)
+send_text(a, {"t": "nat", "x": ax + 5, "y": ay + 5, "h": 0, "s": 0, "f": 1, "hp": 100, "ar": 0})
+drain(a, 0.5)
+u1.sendto(json.dumps({"t": "nat", "x": ax + 8, "y": ay + 8, "h": 0, "s": 0, "f": 1, "hp": 100, "ar": 0}).encode(), (HOST, PORT))
+time.sleep(0.6)
+
+# UDP-Guy talks: [0x56][0x4F][page]; Admin (WS) must hear [sid][vol][0x4F][page]
+u1.sendto(bytes([0x56, 0x4F]) + OPUS_PAGE, (HOST, PORT))
+nframes = []
+deadline = time.time() + 5
+while time.time() < deadline and not nframes:
+    nframes = [f for f in drain(a, 0.4) if isinstance(f, tuple)]
+check("WS player hears native UDP voice", bool(nframes))
+nf = nframes[0][1]
+nside = _st.unpack("<I", nf[:4])[0]
+check("native voice keeps sender id", nside == u1h["id"])
+check("native voice frame intact", nf[5] == 0x4F and nf[6:] == OPUS_PAGE)
+
+# Admin (WS) talks; UDP-Guy must receive [0x56][sid][vol][0x4F][page]
+send_binary(a, bytes([0x4F]) + OPUS_PAGE)
+ud = None
+deadline = time.time() + 5
+while time.time() < deadline and ud is None:
+    try:
+        d = u1.recv(65535)
+        if d and d[0:1] == b"\x56": ud = d
+    except socket.timeout:
+        break
+check("UDP client receives WS voice", ud is not None and ud[0] == 0x56)
+check("UDP voice frame shape", ud[1:5] == _st.pack("<I", ha["id"]) and ud[6] == 0x4F and ud[7:] == OPUS_PAGE)
+u1.close()
+
 print(f"\nALL {passed} VOICE TESTS PASSED ✅")
 srv.send_signal(signal.SIGINT)
 try: srv.wait(timeout=3)

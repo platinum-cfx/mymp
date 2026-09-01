@@ -528,10 +528,14 @@ class World:
             if dist > self.VOICE_RANGE:
                 continue
             vol = max(0, min(255, int(255 * (1.0 - dist / self.VOICE_RANGE))))
+            frame = struct.pack("<I", p.id) + bytes([vol]) + payload
             if t.ws:
                 # [sid:4][vol:1][payload] — sid lets receivers run a separate
                 # decode stream per speaker (opus is stateful per stream)
-                t.ws.send_binary(struct.pack("<I", p.id) + bytes([vol]) + payload)
+                t.ws.send_binary(frame)
+            if t.udp_addr and self.udp:
+                # native client: [0x56][sid:4][vol:1][payload]
+                self.udp.send_binary(t.udp_addr, b"\x56" + frame)
 
     def _nearby(self, ent, bucket, budget=48):
         """Entities in scope: same bucket + range, capped by a per-player

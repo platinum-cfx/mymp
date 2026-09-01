@@ -379,3 +379,28 @@ fails to load (blocked/offline), voice falls back to raw PCM automatically.
 `tests/opus_roundtrip.js` proves the full encode->decode chain in Node
 (12,288 samples out of 0.8 s of sine, peak amplitude intact); voice.py grew to
 8 checks including an end-to-end opus-page-through-the-server test.
+
+## Chapter 16 — In-game voice in the GTA V client (WASAPI + Opus) (Sep 1, 2026)
+
+MyMP is a GTA V mod like FiveM/alt:V — the ASI runs inside GTA5.exe — and now
+it has the last missing piece: **real in-game voice**.
+
+- `client/src/voice_core.cpp` — platform-neutral Opus + Ogg framing: every
+  20 ms frame is a single-packet Ogg page (OpusHead BOS + OpusTags once per
+  stream), byte-identical in shape to the browser's opus-recorder pages, so
+  GTA players and browser players hear each other with zero special-casing.
+- `client/src/voice_audio.cpp` — WASAPI: mic capture (communications device,
+  shared mode, event callback), mono mix, linear resample to 16 kHz, encode
+  while the PTT key (default `N`, configurable in mymp.ini `[voice]`) is
+  held; playback mixes per-speaker decode streams and resamples to the device
+  rate. Raw-PCM browser frames are decoded too.
+- libopus 1.5.2 cross-compiled to a static lib for the ASI with zig
+  (`-DVAR_ARRAYS -DOPUS_BUILD -DFLOATING_POINT`, 137 sources, BSD-3).
+- Server: UDP datagrams starting with `0x56` are voice; `handle_voice`
+  forwards to WebSocket AND UDP players with `[sid:4][vol:1]` prefixes.
+- Proven: `voice_core_test` (Linux harness — 1 s sine in, 16,000 samples
+  out, peak intact, late-join path), `tests/native_browser_voice.js` (the
+  C++ pages decode in the browser's wasm decoder: 12,288 samples, peak
+  0.522), and voice.py grew to 14 checks including native-UDP -> WS and
+  WS -> native-UDP end-to-end. `MyMP.asi` is now 958 KB; `MyMP.exe` rebuilt
+  (4,775,136 B).

@@ -289,14 +289,17 @@ python3 voice.py         # 4/4 — proximity voice routing, volume fade
   `/delobj <id>`, `/objects`, `/clearmap`; props persist to
   `data/map_objects.json` and render in the web client *and* in GTA V
 - **In-game player list** — press `P` in GTA V for a live name/HP overlay
-- **Opus voice** — proximity voice now encodes with libopus in WebAssembly
-  (`web/vendor/opus`, MIT opus-recorder): a 20 ms frame drops from ~640 to
-  ~44 bytes (~14x less bandwidth), with raw-PCM fallback if wasm is blocked
+- **Opus voice** — proximity voice encodes with libopus: the browser uses a
+  WebAssembly build (`web/vendor/opus`, MIT opus-recorder), and **the GTA V
+  client now has real in-game voice too** — WASAPI mic capture (hold `N` to
+  talk), Opus/Ogg encoding in the ASI (bundled libopus, BSD-3), per-speaker
+  decoding and mixed playback through your speakers. A 20 ms frame drops from
+  ~640 to ~44 bytes (~14x less bandwidth). GTA players and browser players
+  hear each other — byte-compatible, proven by tests.
 - **Scale-tested to 120 concurrent players** — `tests/scale.py` (caught and
   fixed a real dict-mutation race in state broadcast)
 
 Still open:
-- GTA-client mic (WASAPI) — voice in the GTA client itself
 - Asset streaming (vehicles / clothing)
 - In-game GUI polish (NUI-style), settings
 - Deeper native coverage (gameplay: tasks, cameras, animations)
