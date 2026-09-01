@@ -34,7 +34,9 @@ class PluginHost:
             "join": [], "leave": [], "chat": [],
             "command": [], "event": [], "tick": [], "interval": [],
         }
-        self.plugins = {}   # name -> {"mod": module, "manifest": dict}
+        self.plugins = {}      # name -> {"mod": module, "manifest": dict}
+        self.client_scripts = {}  # resource name -> [file, ...]
+        self._script_cache = {}   # (resource, file) -> bytes
         self._timers = []
 
     def register(self, plugin_name, fn_name, fn):
@@ -58,6 +60,13 @@ class PluginHost:
             if not os.path.isfile(main):
                 continue
             manifest = self._read_manifest(path)
+            files = manifest.get("client_scripts") or []
+            if isinstance(files, list):
+                keep = [str(f) for f in files
+                        if os.path.isfile(os.path.join(path, str(f)))
+                        and str(f).endswith(".lua")]
+                if keep:
+                    self.client_scripts[name] = keep
             try:
                 spec = importlib.util.spec_from_file_location(
                     f"mymp_plugin_{name}", main)
@@ -81,6 +90,26 @@ class PluginHost:
                     self.log(f"timer error: {e}")
                 timer[0] = now + timer[1]
 
+    def script(self, resource, file):
+        """Return the bytes of a client script (FiveM-style resource file)."""
+        if resource not in self.client_scripts:
+            return None
+        if file not in self.client_scripts[resource]:
+            return None
+        key = (resource, file)
+        if key not in self._script_cache:
+            pth = os.path.join(self.plugin_dir, resource, file)
+            try:
+                with open(pth, "rb") as f:
+                    self._script_cache[key] = f.read()
+            except OSError:
+                return None
+        return self._script_cache[key]
+
+    def scripts_list(self):
+        return [{"name": n, "files": list(fs)}
+                for n, fs in sorted(self.client_scripts.items())]
+
     @staticmethod
     def _read_manifest(path):
         p = os.path.join(path, "manifest.json")
@@ -91,7 +120,8 @@ class PluginHost:
             with open(p, encoding="utf-8") as f:
                 m = json.load(f)
             return {k: m.get(k, "") for k in
-                    ("name", "description", "author", "version", "tags")}
+                    ("name", "description", "author", "version", "tags",
+                     "client_scripts")}
         except Exception:
             return {"name": os.path.basename(path), "version": "0.0.0",
                     "author": "?", "description": ""}

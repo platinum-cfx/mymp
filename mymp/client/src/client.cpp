@@ -24,6 +24,9 @@
 #include "net.h"
 #include "scriptthread.h"
 #include "voice_audio.h"
+#include "script_rt.h"
+#include "http_get.h"
+#include "lua_native_bindings.h"
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "psapi.lib")
@@ -411,6 +414,66 @@ void showHelp(const std::string& text) {
     invoke<void>(N_END_TEXT_COMMAND_DISPLAY_HELP, 0, 0, 1, 4000);
 }
 
+// ---------- client-side scripting (Lua resources, like FiveM) ----------
+ScriptRuntime g_scriptRt;
+std::string g_scriptSecret;
+bool g_scriptsDownloaded = false;
+
+static void scriptPrint(const char* text) {
+    if (!text || !*text) return;
+    std::string t(text);
+    if (t.size() > 90) t.resize(90);
+    showHelp(t);
+    logLine("[lua] " + t);
+}
+
+static void scriptSendEvent(const char* name, const char* dataJson) {
+    if (!name || !*name) return;
+    std::string msg = "{\"t\":\"event\",\"name\":\""
+        + mymp::jsonEscape(name) + "\",\"data\":"
+        + (dataJson && *dataJson ? dataJson : "{}") + "}";
+    g_sock.send(msg);
+}
+
+// download + load the server's client scripts (the hello carries the list)
+static void downloadClientScripts(const mymp::Json& m) {
+    if (g_scriptsDownloaded) return;
+    const mymp::Json* list = m.get("scripts");
+    const mymp::Json* secret = m.get("secret");
+    if (!list || list->type != mymp::Json::ARR) return;
+    g_scriptSecret = secret ? secret->asStr() : "";
+    g_scriptsDownloaded = true;
+    for (const mymp::Json& res : list->arr) {
+        std::string rname = res.has("name") ? res.get("name")->asStr() : "";
+        const mymp::Json* files = res.get("files");
+        if (rname.empty() || !files || files->type != mymp::Json::ARR) continue;
+        std::string dir = g_gameDir + "mymp_scripts\\" + rname;
+        CreateDirectoryA(dir.c_str(), nullptr);
+        for (const mymp::Json& f : files->arr) {
+            std::string file = f.asStr();
+            if (file.empty()) continue;
+            std::string path = "/scripts/" + rname + "/" + file + "?t=" + g_scriptSecret;
+            std::string body = mymp::httpGet(g_cfg.host, g_cfg.port, path);
+            if (body.empty()) {
+                logLine("[lua] failed to download " + rname + "/" + file);
+                continue;
+            }
+            std::string full = dir + "\\" + file;
+            FILE* fp = fopen(full.c_str(), "wb");
+            if (fp) {
+                fwrite(body.data(), 1, body.size(), fp);
+                fclose(fp);
+            }
+            std::string err;
+            if (g_scriptRt.loadResource(rname + "/" + file, body, err))
+                logLine("[lua] loaded " + rname + "/" + file + " (" +
+                        std::to_string(body.size()) + " bytes)");
+            else
+                logLine("[lua] script error in " + rname + "/" + file + ": " + err);
+        }
+    }
+}
+
 // ---------- protocol handling ----------
 void handleMessage(const Json& m) {
     std::string t = m.asStr();
@@ -430,6 +493,7 @@ void handleMessage(const Json& m) {
         g_ownVeh = spawnOwnVehicle(g_cfg.vehicle, (float)x, (float)y, 0.0f, (float)h);
         if (g_ownVeh) g_ownVehSpawned = true;
         logLine(g_ownVeh ? "Own vehicle spawned." : "WARNING: could not spawn vehicle — check model name in mymp.ini");
+        downloadClientScripts(m);
     } else if (t == "state") {
         const Json* ents = m.get("ents");
         if (!ents) return;
@@ -630,9 +694,17 @@ void handleMessage(const Json& m) {
             std::string msg = data && data->has("msg") ? data->get("msg")->asStr() : "";
             if (!msg.empty()) showHelp(msg.substr(0, 90));
         }
+        // client-side Lua scripts see every server event by name
+        g_scriptRt.dispatch(name, data ? data->toJson() : "{}");
     } else if (t == "sys" || t == "chat") {
         std::string msg = m.has("msg") ? m.get("msg")->asStr() : "";
         if (t == "chat" && m.has("name")) msg = m.get("name")->asStr() + ": " + msg;
+        {
+            std::string payload = "{\"name\":\"" + mymp::jsonEscape(
+                t == "chat" && m.has("name") ? m.get("name")->asStr() : "")
+                + "\",\"msg\":\"" + mymp::jsonEscape(msg) + "\"}";
+            g_scriptRt.dispatch(t, payload);
+        }
         if (!msg.empty()) {
             showHelp(msg.substr(0, 90));
             logLine("[chat] " + msg);
@@ -644,6 +716,7 @@ void handleMessage(const Json& m) {
             uint32_t id = (uint32_t)m.get("id")->num;
             deleteRemoteVehicle(id);
             deleteRemotePed(id);
+            g_scriptRt.dispatch("leave", m.toJson());
         }
     }
 }
@@ -952,6 +1025,12 @@ void clientLoop() {
         logLine("FATAL: could not open UDP socket to " + g_cfg.host + ":" + std::to_string(g_cfg.port));
         return;
     }
+    mymp::ScriptHost sh;
+    sh.print = scriptPrint;
+    sh.sendEvent = scriptSendEvent;
+    if (g_scriptRt.init(sh))
+        logLine("Client scripting ready (Lua 5.4, " + std::to_string(LUA_NATIVES_COUNT) +
+                " native bindings).");
     g_sock.send(msgJoin());
     logLine("Joining " + g_cfg.host + ":" + std::to_string(g_cfg.port) + " as " + g_cfg.name);
 

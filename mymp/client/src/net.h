@@ -31,6 +31,8 @@ struct Json {
     }
     // parse a JSON document into this value; returns false on error
     bool parse(const std::string& text);
+    // serialize this value back to JSON text
+    std::string toJson() const;
 };
 
 // escape a string for JSON output

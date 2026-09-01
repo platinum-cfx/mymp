@@ -142,6 +142,7 @@ def main():
     httpd = MyMPHTTPServer((args.host, args.port), os.path.join(BASE, "web"),
                            on_ws_open, on_ws_msg, on_ws_close,
                            info_fn=world.info, on_ws_binary=on_ws_binary)
+    httpd.script_fn = world.serve_script
 
     def udp_msg(msg, addr):
         p = world.by_udp.get(addr)

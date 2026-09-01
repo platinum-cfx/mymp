@@ -15,6 +15,7 @@ import os
 import socket
 import struct
 import threading
+import urllib.parse
 
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 MAX_MSG = 1 << 20
@@ -168,6 +169,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if path == "/ws" and self.headers.get("Upgrade", "").lower() == "websocket":
             self._upgrade()
             return
+        if path.startswith("/scripts/"):
+            self._serve_script(self.path)   # keep ?t= secret
+            return
         if path == "/info.json":
             # public server info for the server browser (CORS-enabled)
             body = json.dumps(self.server.info_fn()).encode("utf-8")
@@ -182,6 +186,35 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 pass
             return
         self._serve_static(path)
+
+    def _serve_script(self, path):
+        """Serve a client Lua resource file (like FiveM's resource download),
+        authenticated with the per-connection script secret from the hello."""
+        parts = path.split("?")
+        route = parts[0].strip("/").split("/")
+        q = urllib.parse.parse_qs(parts[1]) if len(parts) > 1 else {}
+        if len(route) != 3 or route[0] != "scripts":
+            self.send_error(404)
+            return
+        resource, file = route[1], route[2]
+        secret = q.get("t", [""])[0]
+        fn = getattr(self.server, "script_fn", None)
+        if not fn:
+            self.send_error(404)
+            return
+        body, ok = fn(resource, file, secret)
+        if body is None:
+            self.send_error(404 if ok else 403)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except OSError:
+            pass
 
     def _upgrade(self):
         key = self.headers.get("Sec-WebSocket-Key", "")

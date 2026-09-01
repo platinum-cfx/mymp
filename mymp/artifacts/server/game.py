@@ -5,7 +5,9 @@ The server is authoritative (like FiveM / alt:V OneSync): client inputs are
 suggestions, the server decides where everything actually is, and broadcasts
 state to players within scope (same routing bucket + range).
 """
+import base64
 import math
+import os
 import random
 import struct
 import re
@@ -64,7 +66,7 @@ class Entity:
 class Player:
     __slots__ = ("id", "name", "color", "ent", "ws", "udp_addr",
                  "admin", "native", "bucket", "last_seen", "last_chat",
-                 "last_event", "greeted", "acct", "lic")
+                 "last_event", "greeted", "acct", "lic", "script_secret")
 
     def __init__(self, pid, name, color, ws=None, udp_addr=None, native=False):
         self.id = pid
@@ -177,6 +179,7 @@ class World:
         sx, sy = random.choice(SPAWNS)
         p.ent.x, p.ent.y = sx, sy
         p.ent.heading = random.uniform(0, math.tau)
+        p.script_secret = base64.urlsafe_b64encode(os.urandom(9)).decode()[:12]
         # plugins may adjust spawn/colour before the hello goes out
         for fn in self.plugins.hooks["join"]:
             try:
@@ -277,6 +280,17 @@ class World:
     def broadcast_event(self, name, data=None):
         self.broadcast({"t": "event", "name": name, "data": data or {}})
 
+    def serve_script(self, resource, file, secret):
+        """HTTP handler for /scripts/<resource>/<file>?t=<secret>."""
+        p = next((pl for pl in self.players.values()
+                  if pl.script_secret == secret), None)
+        if p is None:
+            return None, False          # 403
+        body = self.plugins.script(resource, file)
+        if body is None:
+            return None, True           # 404
+        return body, True
+
     def emit(self, event, *args):
         """Server-side event bus for plugins (e.g. 'vehicleChanged')."""
         for fn in self.plugins.hooks.get("server:" + event, []):
@@ -297,6 +311,8 @@ class World:
             "spawn": [p.ent.x, p.ent.y, round(p.ent.heading, 3)],
             "hostname": self.cfg.get("sv_hostname", "MyMP"),
             "maxclients": int(self.cfg.get("sv_maxclients", 32)),
+            "scripts": self.plugins.scripts_list(),
+            "secret": p.script_secret,
         })
 
     # ---------------- input / state / chat / events ----------------

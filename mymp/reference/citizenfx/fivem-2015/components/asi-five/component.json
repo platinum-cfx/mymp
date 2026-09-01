@@ -1,0 +1,9 @@
+{
+	"name": "asi:five",
+	"version": "0.1.0",
+	"dependencies": [
+		"fx[2]",
+		"vendor:boost_filesystem"
+	],
+	"provides": []
+}

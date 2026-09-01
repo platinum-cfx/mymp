@@ -451,3 +451,28 @@ modification); the ASI pattern-scans the native table per build; the server is
 authoritative with buckets/range/budgets; plugins mirror resources. The
 verified conclusion: **MyMP already is the FiveM model — GTA V only, each
 player in their own single-player session, server sync on top.**
+
+## Chapter 19 — Client-side scripting: Lua resources run in-game (Sep 1, 2026)
+
+Owner directive: *"client side scripting lua is c# resources run in game,
+uh frameworks."* (First of the four FiveM gaps; asset streaming, 1,024-player
+OneSync scale and the ~6,000-native table are the follow-ups.)
+
+Shipped (server side + Lua runtime + tests, `mymp/server` and
+`mymp/client/src/script_rt.*`, `mymp/lua` vendored under client/src):
+- Resources declare `client_scripts: ["client.lua"]` in their manifest.json;
+  the server streams those exact bytes to every joining GTA V client over
+  `/scripts/<resource>/<file>?t=<secret>` (per-connection secret in the hello,
+  403 on bad secret, 404 on unknown file).
+- The game client runs each script in its own Lua 5.4 environment chained to
+  `_G` (no cross-resource global collisions), with the `mymp` API:
+  `mymp.print`, `mymp.on(event, fn)` (server events + chat), `mymp.send(name,
+  data)` (events back to the server/plugins), `mymp.native(hash, args...)`
+  (any of the 6,302 typed native bindings, by hash or name), `mymp.nativesCount`.
+- Demo resource `server/plugins/scriptdemo` proves the round trip: on join the
+  server pushes `demo:hello`; the in-game Lua answers `demo:pong`; a chat
+  command `!scriptdemo` fires `demo:triggered` and the server plugin broadcasts
+  `demo:announce` to everyone. Fully covered by `tests/scripting.py` (6 tests)
+  and `tests/script_rt_test.cpp` (12 Lua-runtime tests, runs on Linux CI).
+- C++/JS/C# runtimes and a UI framework layer (like FiveM's NUI) remain
+  roadmap; the Lua runtime is the foundation they plug into.

@@ -1,0 +1,92 @@
+#include "fxIBase.idl"
+
+%{C++
+#include "fxNativeContext.h"
+%}
+
+// fxIStream is here temporarily - will be moved in the future
+[ptr] native voidPtr(void);
+
+[uuid(82EC2441-DBB4-4512-81E9-3A98CE9FFCAB)]
+interface fxIStream : fxIBase
+{
+	void Read(in voidPtr data, in uint32_t size, out uint32_t bytesRead);
+
+	void Write(in voidPtr data, in uint32_t size, out uint32_t bytesWritten);
+
+	void Seek(in int64_t offset, in int32_t origin, out uint64_t newPosition);
+
+	void GetLength(out uint64_t length);
+};
+
+[ref] native NativeCtx(fxNativeContext);
+
+[uuid(8FFDC384-4767-4EA2-A935-3BFCAD1DB7BF)]
+interface IScriptHost : fxIBase
+{
+	void InvokeNative(inout NativeCtx context);
+
+	void OpenSystemFile(in charPtr fileName, out fxIStream stream);
+
+	void OpenHostFile(in charPtr fileName, out fxIStream stream);
+
+	void CanonicalizeRef(in int32_t localRef, in int32_t instanceId, out charPtr refString);
+};
+
+[uuid(67B28AF1-AAF9-4368-8296-F93AFC7BDE96)]
+interface IScriptRuntime : fxIBase
+{
+	void Create(in IScriptHost scriptHost);
+
+	void Destroy();
+
+	[notxpcom] voidPtr GetParentObject();
+
+	[notxpcom] void SetParentObject(in voidPtr obj);
+
+	[notxpcom] int32_t GetInstanceId();
+};
+
+[uuid(4720A986-EAA6-4ECC-A31F-2CE2BBF569F7)]
+interface IScriptRuntimeHandler : fxIBase
+{
+	void PushRuntime(in IScriptRuntime runtime);
+
+	void GetCurrentRuntime(out IScriptRuntime runtime);
+
+	void PopRuntime(in IScriptRuntime runtime);
+};
+
+[uuid(91B203C7-F95A-4902-B463-722D55098366)]
+interface IScriptTickRuntime : fxIBase
+{
+	void Tick();
+};
+
+[uuid(637140DB-24E5-46BF-A8BD-08F2DBAC519A)]
+interface IScriptEventRuntime : fxIBase
+{
+	void TriggerEvent(in charPtr eventName, in charPtr argsSerialized, in uint32_t serializedSize, in charPtr sourceId);
+};
+
+[uuid(A2F1B24B-A29F-4121-8162-86901ECA8097)]
+interface IScriptRefRuntime : fxIBase
+{
+	void CallRef(in int32_t refIdx, in charPtr argsSerialized, in uint32_t argsSize, out charPtr retvalSerialized, out uint32_t retvalSize);
+
+	void DuplicateRef(in int32_t refIdx, out int32_t newRefIdx);
+
+	void RemoveRef(in int32_t refIdx);
+};
+
+[uuid(567634C6-3BDD-4D0E-AF39-7472AED479B7)]
+interface IScriptFileHandlingRuntime : fxIBase
+{
+	[notxpcom] int32_t HandlesFile(in charPtr scriptFile);
+
+	void LoadFile(in charPtr scriptFile);
+};
+
+%{C++
+#include "PushEnvironment.h"
+%}

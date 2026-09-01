@@ -1,0 +1,8 @@
+{
+  "name": "Script Demo",
+  "description": "Shows client-side Lua scripting: a Lua file streamed to GTA V and executed inside the game.",
+  "author": "MyMP",
+  "version": "1.0.0",
+  "tags": ["core", "demo"],
+  "client_scripts": ["client.lua"]
+}
