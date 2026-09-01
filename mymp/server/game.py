@@ -7,6 +7,7 @@ state to players within scope (same routing bucket + range).
 """
 import math
 import random
+import struct
 import re
 import time
 
@@ -528,7 +529,9 @@ class World:
                 continue
             vol = max(0, min(255, int(255 * (1.0 - dist / self.VOICE_RANGE))))
             if t.ws:
-                t.ws.send_binary(bytes([vol]) + payload)
+                # [sid:4][vol:1][payload] — sid lets receivers run a separate
+                # decode stream per speaker (opus is stateful per stream)
+                t.ws.send_binary(struct.pack("<I", p.id) + bytes([vol]) + payload)
 
     def _nearby(self, ent, bucket, budget=48):
         """Entities in scope: same bucket + range, capped by a per-player

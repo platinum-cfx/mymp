@@ -268,6 +268,7 @@ python3 voice.py         # 4/4 — proximity voice routing, volume fade
   dispute that took down alt:V and RAGE:MP in 2026.
 - Third-party code we do use is **permissively licensed and kept with its
   license + attribution** in `mymp/reference/`:
+  - **opus-recorder** (MIT) — libopus compiled to WebAssembly for browser voice (`web/vendor/opus/`)
   - **GTA:Network** (MIT) — sync/interpolation design, client/server reference
   - **VMultiplayer / V:MP** (Apache-2.0) — GUI/input-hook blueprints
   - **alt:V example resources & ecosystem** (MIT) — maps, types, docs
@@ -288,13 +289,17 @@ python3 voice.py         # 4/4 — proximity voice routing, volume fade
   `/delobj <id>`, `/objects`, `/clearmap`; props persist to
   `data/map_objects.json` and render in the web client *and* in GTA V
 - **In-game player list** — press `P` in GTA V for a live name/HP overlay
+- **Opus voice** — proximity voice now encodes with libopus in WebAssembly
+  (`web/vendor/opus`, MIT opus-recorder): a 20 ms frame drops from ~640 to
+  ~44 bytes (~14x less bandwidth), with raw-PCM fallback if wasm is blocked
+- **Scale-tested to 120 concurrent players** — `tests/scale.py` (caught and
+  fixed a real dict-mutation race in state broadcast)
 
 Still open:
-- Opus voice + GTA-client mic (WASAPI)
+- GTA-client mic (WASAPI) — voice in the GTA client itself
 - Asset streaming (vehicles / clothing)
 - In-game GUI polish (NUI-style), settings
 - Deeper native coverage (gameplay: tasks, cameras, animations)
-- Scale testing toward 100+ players (budgets/streaming already OneSync-style)
 
 > MyMP is an unofficial community project. Not affiliated with Rockstar Games,
 > Take-Two Interactive, or Cfx.re. Requires a legitimate copy of GTA V for the

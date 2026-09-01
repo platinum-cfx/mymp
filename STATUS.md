@@ -301,6 +301,7 @@ You asked about V:MP (V-Multiplayer). Good news this time:
 - **Custom map objects (asset-streaming lite)** — `/addobj`, `/delobj`, `/objects`, `/clearmap`; persisted, rendered in web + GTA client
 - **In-game player list** — press `P` in GTA V for a live name/HP overlay
 - **Scale-tested to 120 concurrent players** — `tests/scale.py`: 120/120 joined, every bot sustained ~15 state frames/s under full load, 0 errors (caught + fixed a dict-mutation race in state broadcast)
+- **Opus voice in the browser** — voice packets encode with libopus (wasm, ~44 B per 20 ms frame vs ~640 B raw PCM); voice frames carry a 4-byte sender id so each speaker gets its own decode stream; raw-PCM fallback intact
 - **Persistence keyed by license identifier** (CfX-style, generated per install, `HKCU\Software\MyMP`) — name fallback for clients that send none
 - **Web client is 2D top-down** — it's the browser companion, not a GTA renderer
 

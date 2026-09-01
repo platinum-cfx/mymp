@@ -212,6 +212,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             ctype = "text/html; charset=utf-8"
         elif full.endswith(".js"):
             ctype = "application/javascript"
+        elif full.endswith(".wasm"):
+            ctype = "application/wasm"
         elif full.endswith(".css"):
             ctype = "text/css"
         else:

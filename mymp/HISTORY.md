@@ -367,3 +367,15 @@ mutated the players dict during iteration (`RuntimeError: dictionary changed
 size during iteration`) — fixed by snapshot iteration in `_broadcast_state`,
 `_nearby`, voice routing, accounts tick and the /who command. A `--maxclients`
 CLI override was added to the server for load testing.
+
+**Opus voice (web)**: proximity voice now uses libopus compiled to WebAssembly
+(vendored `web/vendor/opus/`, MIT opus-recorder 8.0.5 by Chris Rudmin). The
+browser captures 48 kHz mic audio, the encoder worker resamples to 16 kHz and
+emits 20 ms Ogg pages (~44 B vs ~640 B raw PCM); the server is codec-agnostic
+and now prefixes every voice frame with a 4-byte sender id so receivers run
+one decode stream per speaker (Opus is stateful per stream). Ogg header pages
+are re-sent every 5 s so late listeners can init their decoder. If the wasm
+fails to load (blocked/offline), voice falls back to raw PCM automatically.
+`tests/opus_roundtrip.js` proves the full encode->decode chain in Node
+(12,288 samples out of 0.8 s of sine, peak amplitude intact); voice.py grew to
+8 checks including an end-to-end opus-page-through-the-server test.

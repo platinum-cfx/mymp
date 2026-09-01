@@ -560,13 +560,20 @@ function advanceRender(dt){
 }
 
 /* ---------------- voice chat (proximity, browser-side) ----------------
-   Mic capture -> 16 kHz mono Int16 PCM -> binary WS frames to the server;
-   the server routes to nearby players with a volume byte (0-255) prefix.
-   Playback: push incoming buffers into an AudioContext with per-packet gain.
-   (Raw PCM for now; Opus is the future upgrade.) */
+   Mic capture -> binary WS frames; the server routes to nearby players
+   with a [sid:4][vol:1] prefix so each speaker gets its own stream.
+
+     opus (default): [0x4F][ogg-page...]  — opus-recorder wasm worker
+                    (libopus compiled to WebAssembly, MIT, web/vendor/opus)
+     fallback:       [pcm int16 LE...]    — raw 16 kHz PCM if wasm fails
+
+   Opus turns a 20 ms frame from ~640 bytes of PCM into ~44 bytes (~14x
+   less bandwidth). The encoder worker is self-contained (wasm embedded);
+   decoder workers are spawned per speaker (Opus is stateful per stream). */
 let voice = {
   ctx: null, stream: null, node: null, talk: false, supported: true,
-  sendQueue: [], interval: null
+  opus: false, enc: null, hdrPages: [], hdrTimer: null,
+  decoders: new Map(), pruneTimer: null
 };
 function voiceLog(msg){ system(msg); }
 
@@ -576,6 +583,43 @@ function ensureVoiceCtx(){
     catch (e) { voice.supported = false; return false; }
   }
   return true;
+}
+
+/* Try to boot the opus encoder worker (wasm embedded). On any failure we
+   fall back to raw PCM so voice always works. */
+function setupOpus(){
+  return new Promise(resolve => {
+    let done = false;
+    const finish = ok => { if (!done) { done = true; resolve(ok); } };
+    let enc;
+    try { enc = new Worker('vendor/opus/encoderWorker.min.js'); }
+    catch (e) { return finish(false); }
+    const timer = setTimeout(() => finish(false), 5000);
+    enc.onerror = () => finish(false);
+    enc.onmessage = e => {
+      if (!e.data) return;
+      if (e.data.message === 'ready') {
+        enc.postMessage({ command: 'getHeaderPages' });  // Ogg ID + comment pages
+      } else if (e.data.message === 'page' && e.data.page && voice.hdrPages.length < 2) {
+        voice.hdrPages.push(new Uint8Array(e.data.page));  // copy before detach
+        if (voice.hdrPages.length === 2) { clearTimeout(timer); voice.enc = enc; finish(true); }
+      }
+    };
+    enc.postMessage({ command: 'init',
+      encoderApplication: 2048,        // voice-optimised
+      encoderFrameSize: 20,            // 20 ms frames
+      encoderSampleRate: 16000,        // 16 kHz opus
+      originalSampleRate: 48000,       // mic rate
+      numberOfChannels: 1, maxFramesPerPage: 1, resampleQuality: 3 });
+  });
+}
+
+function opusSendFrame(page){
+  if (!voice.enc || ws.readyState !== 1) return;
+  const out = new Uint8Array(1 + page.length);
+  out[0] = 0x4F;                       // opus marker (server adds sid+vol)
+  out.set(page, 1);
+  ws.send(out);
 }
 
 function startVoice(){
@@ -589,12 +633,28 @@ function startVoice(){
     if (!voice.ctx) return;
     voice.stream = st;
     voice.talk = true;
+    // try opus; if it boots, also re-send header pages every 5s so late
+    // listeners can init their decoder stream for us
+    setupOpus().then(ok => {
+      voice.opus = ok;
+      if (ok) {
+        for (const p of voice.hdrPages) opusSendFrame(p);
+        voice.hdrTimer = setInterval(() => {
+          if (voice.talk) for (const p of voice.hdrPages) opusSendFrame(p);
+        }, 5000);
+      }
+      voiceLog(ok ? '🎙 Voice ON — talking now (Opus).' : '🎙 Voice ON — talking now (PCM fallback).');
+    });
     const src = voice.ctx.createMediaStreamSource(st);
     voice.node = voice.ctx.createScriptProcessor(2048, 1, 1);
     voice.node.onaudioprocess = ev => {
       if (!voice.talk || ws.readyState !== 1) return;
-      // downsample 44.1/48k -> 16k mono Int16
       const ch = ev.inputBuffer.getChannelData(0);
+      if (voice.opus && voice.enc) {
+        voice.enc.postMessage({ command: 'encode', buffers: [ch] });
+        return;
+      }
+      // raw PCM fallback: downsample 44.1/48k -> 16k mono Int16
       const step = ev.inputBuffer.sampleRate / 16000;
       const n = Math.floor(ch.length / step);
       const buf = new DataView(new ArrayBuffer(n * 2));
@@ -604,9 +664,13 @@ function startVoice(){
       }
       ws.send(new Uint8Array(buf.buffer));
     };
+    voice.enc.onmessage = e => {
+      if (e.data && e.data.message === 'page' && e.data.page) {
+        opusSendFrame(new Uint8Array(e.data.page));
+      }
+    };
     src.connect(voice.node);
     voice.node.connect(voice.ctx.destination);
-    voiceLog('🎙 Voice ON — talking now.');
     document.getElementById('btnMic').textContent = '🎙 Voice: ON (click to mute)';
     document.getElementById('btnMic').style.borderColor = '#51cf66';
   }).catch(() => voiceLog('Mic permission denied — voice stays off.'));
@@ -614,6 +678,11 @@ function startVoice(){
 
 function stopVoice(){
   voice.talk = false;
+  if (voice.hdrTimer) { clearInterval(voice.hdrTimer); voice.hdrTimer = null; }
+  if (voice.enc) { try { voice.enc.postMessage({ command: 'close' }); } catch (e) {} voice.enc = null; }
+  voice.opus = false; voice.hdrPages = [];
+  for (const ent of voice.decoders.values()) { try { ent.w.terminate(); } catch (e) {} }
+  voice.decoders.clear();
   if (voice.stream) { voice.stream.getTracks().forEach(t => t.stop()); voice.stream = null; }
   if (voice.node) { voice.node.disconnect(); voice.node.onaudioprocess = null; voice.node = null; }
   voiceLog('Voice OFF.');
@@ -621,17 +690,12 @@ function stopVoice(){
   document.getElementById('btnMic').style.borderColor = '';
 }
 
-function playVoicePacket(data){
-  if (!voice.supported || !voice.talk || !voice.ctx) return;  // don't play unless we're in voice
-  if (!ensureVoiceCtx() || voice.ctx.state === 'suspended') voice.ctx.resume();
-  const vol = data[0] / 255;
-  const pcm = data.slice(1);
-  const n = Math.floor(pcm.length / 2);
+function playRawPcm(payload, vol){
+  const n = Math.floor(payload.length / 2);
   if (n < 100) return;
   const f32 = new Float32Array(n);
-  for (let i = 0; i < n; i++) f32[i] = pcm[i*2] | (pcm[i*2+1] << 8);
   for (let i = 0; i < n; i++) {
-    let v = f32[i];
+    let v = payload[i*2] | (payload[i*2+1] << 8);
     if (v > 0x7FFF) v = v - 0x10000;
     f32[i] = (v / 0x8000) * vol;
   }
@@ -641,6 +705,70 @@ function playVoicePacket(data){
   srcNode.buffer = ab;
   srcNode.connect(voice.ctx.destination);
   srcNode.start();
+}
+
+function playOpusBlocks(blocks, vol){
+  for (const blk of blocks) {
+    const f32 = new Float32Array(blk);   // 16k mono
+    if (f32.length < 100) continue;
+    if (vol !== 1) for (let i = 0; i < f32.length; i++) f32[i] *= vol;
+    const ab = voice.ctx.createBuffer(1, f32.length, 16000);
+    ab.copyToChannel(f32, 0);
+    const srcNode = voice.ctx.createBufferSource();
+    srcNode.buffer = ab;
+    srcNode.connect(voice.ctx.destination);
+    srcNode.start();
+  }
+}
+
+function concatBytes(arrs){
+  const total = arrs.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const a of arrs) { out.set(a, o); o += a.length; }
+  return out;
+}
+
+/* Route one opus page from a speaker: one decoder worker per speaker,
+   buffering until the Ogg BOS (header) page arrives so the decoder can
+   init (the sender re-sends headers every 5s). */
+function routeOpus(sid, page, vol){
+  let ent = voice.decoders.get(sid);
+  if (!ent) {
+    let w;
+    try { w = new Worker('vendor/opus/decoderWorker.min.js'); }
+    catch (e) { return; }
+    w.onmessage = e => { if (Array.isArray(e.data)) playOpusBlocks(e.data, ent.vol); };
+    w.postMessage({ command: 'init', decoderSampleRate: 16000,
+                    outputBufferSampleRate: 16000, resampleQuality: 3 });
+    ent = { w, buf: [], ready: false, last: Date.now(), vol };
+    voice.decoders.set(sid, ent);
+  }
+  ent.last = Date.now();
+  ent.vol = vol;
+  if (page.length > 5 && (page[5] & 2) !== 0) ent.ready = true;  // BOS page
+  if (ent.ready) {
+    if (ent.buf.length) { ent.w.postMessage({ command: 'decode', pages: concatBytes(ent.buf) }); ent.buf = []; }
+    ent.w.postMessage({ command: 'decode', pages: page });
+  } else {
+    ent.buf.push(page);
+    if (ent.buf.length > 120) ent.buf.shift();
+  }
+}
+
+function playVoicePacket(data){
+  if (!voice.supported || !voice.talk || !voice.ctx) return;  // don't play unless we're in voice
+  if (!ensureVoiceCtx() || voice.ctx.state === 'suspended') voice.ctx.resume();
+  // server format: [sid:4][vol:1][payload]
+  if (data.length < 6) return;
+  const sid = (data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)) >>> 0;
+  const vol = data[4] / 255;
+  const payload = data.subarray(5);
+  if (voice.opus && payload.length > 2 && payload[0] === 0x4F) {
+    routeOpus(sid, new Uint8Array(payload.subarray(1)), vol);
+  } else {
+    playRawPcm(payload, vol);
+  }
 }
 
 /* ---------------- main loop ---------------- */

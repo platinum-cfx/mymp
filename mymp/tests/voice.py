@@ -95,8 +95,11 @@ while time.time() < deadline and not frames:
     frames = [f for f in drain(a, 0.4) if isinstance(f, tuple) and f[0] == "BIN"]
 check("Admin receives Bob's voice binary frame", bool(frames))
 f = frames[0][1]
-check("frame has volume byte + PCM", len(f) == 1601 and 0 <= f[0] <= 255)
-check("close-range volume is high (>200)", f[0] > 200)
+import struct as _st
+sid = _st.unpack("<I", f[:4])[0]
+check("frame has [sid][vol][payload]", len(f) == 1605 and 0 <= f[4] <= 255)
+check("sender id is Bob's", sid == hb["id"])
+check("close-range volume is high (>200)", f[4] > 200)
 
 # far-away player should NOT hear (different spawn far away) — teleport Admin far, Bob speaks again
 send_text(a, {"t": "nat", "x": ax + 900, "y": ay + 900, "h": 0, "s": 0, "f": 1, "hp": 100, "ar": 0})
@@ -104,6 +107,22 @@ drain(a, 0.5); drain(b, 0.5)
 send_binary(b, bytes(800))
 got = [x for x in drain(a, 1.0) if isinstance(x, tuple)]
 check("far player does NOT receive voice", not got)
+
+# ---- opus path: browser sends [0x4F][ogg page]; server adds [sid][vol] ----
+OPUS_PAGE = bytes.fromhex(
+    "4f6767530000c0030000000000001e76a67100000000511986fd014a4882b5fc35be6d35e948d87dbb9e0e90d37331121cca")
+send_text(a, {"t": "nat", "x": ax + 5, "y": ay + 5, "h": 0, "s": 0, "f": 1, "hp": 100, "ar": 0})
+drain(a, 0.5); drain(b, 0.5)
+send_binary(b, bytes([0x4F]) + OPUS_PAGE)
+oframes = []
+deadline = time.time() + 5
+while time.time() < deadline and not oframes:
+    oframes = [f for f in drain(a, 0.4) if isinstance(f, tuple)]
+check("opus page routed to nearby player", bool(oframes))
+of = oframes[0][1]
+oside = _st.unpack("<I", of[:4])[0]
+check("opus frame keeps sender id", oside == hb["id"])
+check("opus frame has marker + intact page", of[5] == 0x4F and of[6:] == OPUS_PAGE)
 
 print(f"\nALL {passed} VOICE TESTS PASSED ✅")
 srv.send_signal(signal.SIGINT)
