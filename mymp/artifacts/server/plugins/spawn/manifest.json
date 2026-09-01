@@ -1,0 +1,7 @@
+{
+  "name": "spawn",
+  "description": "Spawn point + welcome message",
+  "author": "MyMP",
+  "version": "1.0.0",
+  "tags": ["core", "spawn"]
+}

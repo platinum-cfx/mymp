@@ -1,0 +1,7 @@
+{
+  "name": "admin",
+  "description": "Kick, announce, instances — ACL-gated",
+  "author": "MyMP",
+  "version": "1.1.0",
+  "tags": ["core", "admin"]
+}

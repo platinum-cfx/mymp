@@ -1,0 +1,7 @@
+{
+  "name": "chat",
+  "description": "Chat relay, whispers, help, resources list",
+  "author": "MyMP",
+  "version": "1.1.0",
+  "tags": ["core", "chat"]
+}

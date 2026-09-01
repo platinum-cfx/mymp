@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+mymp/data/
+.DS_Store

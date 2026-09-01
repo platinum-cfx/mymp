@@ -1,0 +1,7 @@
+{
+  "name": "statebags",
+  "description": "OneSync-style entity state bags (/tag, /state)",
+  "author": "MyMP",
+  "version": "1.0.0",
+  "tags": ["core", "sync"]
+}

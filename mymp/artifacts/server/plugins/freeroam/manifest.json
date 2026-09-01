@@ -1,0 +1,7 @@
+{
+  "name": "freeroam",
+  "description": "Weapons, health, armour — alt:V freeroam-style module",
+  "author": "MyMP",
+  "version": "1.0.0",
+  "tags": ["gameplay", "freeroam"]
+}

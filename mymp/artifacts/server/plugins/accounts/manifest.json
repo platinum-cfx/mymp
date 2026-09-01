@@ -1,0 +1,7 @@
+{
+  "name": "accounts",
+  "description": "Persistence: colours, vehicles, positions (data/accounts.json)",
+  "author": "MyMP",
+  "version": "1.0.0",
+  "tags": ["core", "persistence"]
+}

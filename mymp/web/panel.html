@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MyMP Admin Panel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --accent:#ff9f1c; --bg:#0b0e14; --panel:#0f131c; --line:rgba(255,255,255,.10); }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:#e8ecf3; font-family:"Segoe UI",system-ui,Arial,sans-serif;
+         min-height:100vh; }
+  header { display:flex; align-items:center; gap:14px; padding:16px 22px;
+           border-bottom:1px solid var(--line); background:#0d1119; flex-wrap:wrap; }
+  header h1 { font-size:19px; letter-spacing:.5px; }
+  header h1 b { color:var(--accent); }
+  #pills { display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
+  .pill { background:#121826; border:1px solid var(--line); border-radius:999px;
+          padding:5px 12px; font-size:12px; }
+  .pill b { color:var(--accent); }
+  main { display:grid; grid-template-columns: 340px 1fr; gap:16px; padding:18px 22px; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px;
+          padding:16px; }
+  .card h2 { font-size:12px; letter-spacing:2px; text-transform:uppercase; opacity:.55;
+             margin-bottom:12px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; opacity:.5; font-size:10.5px; letter-spacing:1.5px;
+       text-transform:uppercase; padding:4px 8px; border-bottom:1px solid var(--line); }
+  td { padding:7px 8px; border-bottom:1px solid rgba(255,255,255,.05); }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+  button { background:var(--accent); color:#14100a; border:0; border-radius:8px;
+           padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; }
+  button.ghost { background:transparent; color:#e8ecf3; border:1px solid var(--line); }
+  button.ghost:hover { border-color:var(--accent); color:var(--accent); }
+  button.danger { background:#d64545; color:#fff; }
+  input, select { background:#0d1119; border:1px solid var(--line); color:#e8ecf3;
+                  border-radius:8px; padding:8px 10px; font-size:13px; outline:none; }
+  input:focus { border-color:var(--accent); }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  #console { height:420px; overflow:auto; background:#080b10; border:1px solid var(--line);
+             border-radius:10px; padding:10px 12px; font-family:Consolas,monospace;
+             font-size:12.5px; line-height:1.55; white-space:pre-wrap; }
+  #console .sys { color:#9fd8ff; } #console .adm { color:#ffd43b; }
+  #consoleLine { width:100%; margin-top:8px; font-family:Consolas,monospace; }
+  #login { position:fixed; inset:0; z-index:50; background:rgba(4,6,10,.92);
+           display:flex; align-items:center; justify-content:center; }
+  #login .card { width:min(380px,90vw); text-align:center; padding:28px; }
+  #login input { width:100%; text-align:center; margin:14px 0; }
+  #login small { opacity:.55; font-size:11px; }
+  .tag { font-size:10px; padding:2px 7px; border-radius:999px; border:1px solid var(--line); }
+  .tag.admin { border-color:var(--accent); color:var(--accent); }
+  .err { color:#ff6b6b; font-size:12px; min-height:16px; margin-top:6px; }
+  .ok { color:#51cf66; font-size:12px; min-height:16px; margin-top:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>My<b>MP</b> Admin Panel</h1>
+  <div id="pills">
+    <span class="pill">host <b id="stHost">–</b></span>
+    <span class="pill">v<b id="stVer">–</b></span>
+    <span class="pill">players <b id="stPlayers">0</b>/<span id="stMax">0</span></span>
+    <span class="pill">bots <b id="stBots">0</b></span>
+    <span class="pill">uptime <b id="stUp">–</b></span>
+    <button class="ghost" onclick="location.reload()">refresh</button>
+  </div>
+</header>
+
+<main>
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h2>Players</h2>
+      <table id="playersTable">
+        <thead><tr><th></th><th>id</th><th>name</th><th>bucket</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Resources</h2>
+      <table id="resTable">
+        <thead><tr><th>name</th><th>version</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h2>Console <span style="float:right;font-weight:400;text-transform:none;letter-spacing:0">
+        kick &lt;id&gt; · say &lt;msg&gt; · announce &lt;msg&gt; · set &lt;key&gt; &lt;value&gt;</span></h2>
+      <div id="console"><span class="sys">— connecting to log stream —</span></div>
+      <div class="row" style="margin-top:8px">
+        <input id="consoleLine" placeholder="type a command…" autocomplete="off">
+        <button onclick="sendConsole()">send</button>
+      </div>
+      <div id="actMsg" class="ok"></div>
+    </div>
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="row"><label style="width:110px">hostname</label>
+        <input id="setHost" style="flex:1"></div>
+      <div class="row"><label style="width:110px">max clients</label>
+        <input id="setMax" type="number" min="1" max="1024" style="width:120px"></div>
+      <div class="row"><label style="width:110px">bots</label>
+        <input id="setBots" type="number" min="0" max="60" style="width:120px"></div>
+      <div class="row"><button onclick="applySettings()">apply</button>
+        <div id="setMsg" class="ok"></div></div>
+    </div>
+  </div>
+</main>
+
+<div id="login">
+  <div class="card">
+    <h2 style="margin-bottom:6px">Admin access</h2>
+    <div style="font-size:12.5px;opacity:.75">Enter the admin token to use the panel console.<br>
+      Find it in <b>data/admin_token.txt</b> (server folder) or the server log.</div>
+    <input id="token" placeholder="admin token" autocomplete="off">
+    <button onclick="login()" style="width:100%">unlock</button>
+    <div id="loginMsg" class="err"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+let token = localStorage.getItem('mymp_panel_token') || '';
+let logNext = 0;
+let authed = false;
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function api(path, opts){
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  return { res, data };
+}
+async function post(path, body){
+  return api(path, { method:'POST', headers:{ 'Content-Type':'application/json',
+    ...(token ? { 'X-MyMP-Token': token } : {}) }, body: JSON.stringify(body) });
+}
+
+async function refreshStatus(){
+  const { data } = await api('/api/status');
+  if (!data.hostname) return;
+  document.getElementById('stHost').textContent = data.hostname;
+  document.getElementById('stVer').textContent = data.version;
+  document.getElementById('stPlayers').textContent = data.players;
+  document.getElementById('stMax').textContent = data.maxclients;
+  document.getElementById('stBots').textContent = data.bots;
+  const u = data.uptime|0;
+  document.getElementById('stUp').textContent =
+    u<60 ? u+'s' : Math.floor(u/60)+'m '+ (u%60) + 's';
+  // resources
+  const rt = document.getElementById('resTable').querySelector('tbody');
+  rt.innerHTML = (data.resources||[]).map(r =>
+    '<tr><td>' + esc(r.name) + '</td><td>' + esc(r.version) + '</td></tr>').join('') || '<tr><td colspan=2>none</td></tr>';
+}
+
+async function refreshPlayers(){
+  const { data } = await api('/api/players');
+  if (!Array.isArray(data)) return;
+  const tb = document.getElementById('playersTable').querySelector('tbody');
+  tb.innerHTML = data.map(p =>
+    '<tr><td><span class="dot" style="background:' + esc(p.color) + '"></span>' +
+    (p.admin ? '<span class="tag admin">admin</span>' : '') + '</td>' +
+    '<td>' + p.id + '</td>' +
+    '<td>' + esc(p.name) + (p.native ? ' <span class="tag">GTA</span>' : ' <span class="tag">web</span>') + '</td>' +
+    '<td>' + p.bucket + '</td>' +
+    '<td><button class="ghost danger" onclick="kickPlayer(' + p.id + ')">kick</button></td></tr>'
+  ).join('') || '<tr><td colspan=5 style="opacity:.5">no players online</td></tr>';
+}
+
+window.kickPlayer = function(id){
+  const reason = prompt('Kick player #' + id + ' — reason:') || 'was kicked';
+  post('/api/action', { action:'kick', id, reason }).then(r => {
+    document.getElementById('actMsg').textContent = r.data.error || r.data.msg || '';
+  });
+};
+
+async function sendConsole(){
+  const line = document.getElementById('consoleLine').value.trim();
+  if (!line) return;
+  document.getElementById('consoleLine').value = '';
+  await post('/api/console', { line });
+}
+window.sendConsole = sendConsole;
+document.getElementById('consoleLine').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendConsole();
+});
+
+async function applySettings(){
+  const set = (key, value) => post('/api/action', { action:'set', key, value });
+  const results = [];
+  results.push(await set('sv_hostname', document.getElementById('setHost').value));
+  results.push(await set('sv_maxclients', document.getElementById('setMax').value));
+  results.push(await set('bots', document.getElementById('setBots').value));
+  const err = results.find(r => r.data.error);
+  document.getElementById('setMsg').textContent = err ? 'ERROR: ' + err.data.error : 'applied';
+}
+window.applySettings = applySettings;
+
+window.login = async function(){
+  token = document.getElementById('token').value.trim();
+  const { res } = await post('/api/login', { token });
+  if (res.ok && res.status === 200){
+    localStorage.setItem('mymp_panel_token', token);
+    document.getElementById('login').style.display = 'none';
+    authed = true;
+    connectLogs();
+  } else {
+    document.getElementById('loginMsg').textContent = 'wrong token';
+  }
+};
+
+function connectLogs(){
+  // backfill
+  api('/api/logs?since=0').then(({ data }) => {
+    if (!data.lines) return;
+    const box = document.getElementById('console');
+    box.innerHTML = data.lines.map(l => lineHtml(l[1])).join('');
+    box.scrollTop = box.scrollHeight;
+    logNext = data.next;
+  });
+  // live
+  const es = new EventSource('/api/logs/stream');
+  es.onmessage = ev => {
+    const box = document.getElementById('console');
+    box.insertAdjacentHTML('beforeend', lineHtml(JSON.parse(ev.data)));
+    box.scrollTop = box.scrollHeight;
+    while (box.children.length > 500) box.removeChild(box.firstChild);
+  };
+}
+function lineHtml(t){
+  const cls = t.includes('[admin]') ? 'adm' : 'sys';
+  return '<span class="' + cls + '">' + esc(t) + '</span>\n';
+}
+
+// boot
+refreshStatus(); setInterval(refreshStatus, 3000);
+refreshPlayers(); setInterval(refreshPlayers, 3000);
+if (token){ document.getElementById('login').style.display = 'none'; connectLogs(); }
+else document.getElementById('login').style.display = 'flex';
+})();
+</script>
+</body>
+</html>

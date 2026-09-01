@@ -1,0 +1,31 @@
+{
+  "build": {
+    "content": [
+      {
+        "files": ["api/**.yml", "api/index.md", "articles/**.md", "articles/**/toc.yml", "toc.yml", "index.md"],
+        "exclude": ["api/index.yml"]
+      }
+    ],
+    "resource": [
+      {
+        "files": ["CNAME"]
+      }
+    ],
+    "overwrite": [
+      {
+        "files": ["apidoc/**.yml"]
+      }
+    ],
+    "globalMetadata": {
+      "_disableSideFilter": true,
+      "_gitContribute": {
+        "branch": "master",
+        "apiSpecFolder": "docs/apidoc"
+      },
+      "_gitUrlPattern": "github"
+    },
+    "template": ["default", "templates/docfx-plugins-typescriptreference", "templates/discordfx", "templates/altmp"],
+    "markdownEngineName": "markdig",
+    "dest": "_site"
+  }
+}
