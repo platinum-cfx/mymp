@@ -148,3 +148,30 @@ code, the same legitimate path Alt:V and GT-MP took.
   Chinese project (bus-management app). `westre/Stroopwaffle` (2015 "GTA V PC
   multiplayer" codename) is no-license, read-only. `calibercheats/client` is
   another MultiFive (FiveM-derived, DMCA'd lineage) mirror — trap, avoided.
+
+---
+
+## How FiveM actually works today — primary-source mapping (2026-09-01)
+
+Deep dive into the `citizenfx/fivem` codebase (source-available) and Cfx docs.
+Every mechanism below is how FiveM works **today**, and its MyMP equivalent:
+
+| FiveM mechanism (primary source) | MyMP equivalent |
+|---|---|
+| **Launcher personalities**: `FiveM.exe` (CitiLaunch) bootstraps; a GAME subprocess loads GTA5.exe **manually into memory** (ExecutableLoader), hooks `GetStartupInfoW` to install hooks, and maps a **virtual filesystem** (isolates Social Club files/profiles/saves, blocks PlayGTAV.exe) so the game runs as a clean **offline story-mode session** and never touches GTA Online | `MyMP.exe` = installer + server browser + launch; installs `dinput8.dll` + `MyMP.asi` via the game's own ASI loader (zero game-file modification), launches GTA5.exe into the story-mode session. Same outcome — the game is your single-player session, never Online |
+| **Native table per build**: scans the executable for its build date string, builds the crossmap for that build (TableBuilder) | runtime pattern-scan of the game's pool structures → native table discovered per version |
+| **Netcode**: ENet over UDP; server (FXServer) threads: `svMain` 20 Hz (resources/state), `svNetwork` (packet polling/OOB), `svSync` (entity serialization, relevancy, delta compression) | UDP transport to the GTA client (state + voice), WebSocket for script clients; server-authoritative 10 Hz tick; per-player relevancy (range culling + entity budgets) |
+| **OneSync**: server-authoritative entity registry, **routing buckets**, sync trees → `rl::MessageBuffer` bitstreams, delta compression, client `CloneManager` deserializes clones into the game's `rage::netObject` | buckets/instances, range culling, snapshot interpolation in the ASI; remote players spawn as real vehicles/peds |
+| **Resources**: `fxmanifest.lua`, `client_scripts` (UI/local logic), `server_scripts` (authoritative), lifecycle start/stop, exports, Lua/JS/C# runtimes | plugins with `manifest.json` — server-side only today; client-side scripting is the roadmap item |
+| **Asset streaming**: servers push custom models/textures/audio with caching | map objects streamed from `data/map_objects.json` + spawned in GTA V; full model streaming = biggest remaining lift |
+| **sv_licenseKey**, aces/principals, txAdmin, master list, server browser in launcher | license accounts, ACL, admin panel :40120, registry :30130, hub + launcher browser |
+
+**The one fact that answers "how does it put players in their own session?":**
+FiveM does *not* run a separate world and it does *not* drop you into GTA Online.
+Every player runs **their own GTA5.exe process in its own single-player session**
+and the server only **synchronizes** those sessions (entities streamed per player,
+server-authoritative). That is exactly the MyMP model: each player's `MyMP.asi`
+runs inside their own GTA5.exe story session; the server streams everyone else's
+vehicle/ped/state into it. Same architecture, own implementation — like Alt:V
+and GT-MP wrote their own rather than copying Cfx (whose LICENSE is
+© Take-Two; see START_HERE.md).

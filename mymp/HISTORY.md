@@ -428,3 +428,26 @@ What changed:
 
 The product is now strictly: **MyMP.exe → installs the ASI into your GTA V →
 you play inside GTA V**. Nothing else, just like FiveM.
+
+## Chapter 18 — FiveM deep dive: "own game session, single player" verified (Sep 1, 2026)
+
+Owner directive: *"It needs to ONLY work with GTAV.exe — putting a player into
+their own game session like FiveM does, but in single player. Do research on how
+FiveM works and import it into MyMP."*
+
+Research (primary sources, `citizenfx/fivem` codebase + Cfx docs, see
+RESEARCH.md "How FiveM actually works today"):
+- FiveM's launcher loads GTA5.exe manually, hooks it, and runs it as an
+  **offline story-mode session** — it never touches GTA Online. Players each run
+  their own GTA5.exe; the FXServer just synchronizes the sessions.
+- OneSync: server-authoritative entities, routing buckets, per-client
+  relevancy, sync trees in a bitstream; client deserializes into the game.
+- Resources with fxmanifest.lua run on server (authoritative) and client (UI).
+- Netcode: ENet/UDP; svMain 20 Hz; license keys, aces, txAdmin, master list.
+
+Imported into MyMP (mapping table in RESEARCH.md): our launcher installs
+`MyMP.asi` into GTA V and launches it into the story session (no game-file
+modification); the ASI pattern-scans the native table per build; the server is
+authoritative with buckets/range/budgets; plugins mirror resources. The
+verified conclusion: **MyMP already is the FiveM model — GTA V only, each
+player in their own single-player session, server sync on top.**

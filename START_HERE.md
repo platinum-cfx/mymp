@@ -1,7 +1,9 @@
 # 🚀 MyMP — START HERE
 
-**Your own multiplayer platform for GTA V.** Server works right now (no GTA V needed).
-GTA V client included as source code, builds with one command on Windows.
+**Your own multiplayer platform for GTA V — GTA V only, like FiveM.**
+The server runs on any OS (like FXServer); the game is played **inside GTA5.exe**
+via `MyMP.asi` — each player's own single-player session, synced by your server.
+There is no web game.
 
 ---
 
@@ -34,20 +36,19 @@ using the one reusable thing from those repos (the native hashes from
    ```
    python server\main.py
    ```
-3. A browser opens at **http://localhost:30120** — pick a name, click **JOIN SERVER**.
-   (Friends on your network: http://YOUR-IP:30120)
-4. Admin panel: **http://localhost:40120** — token in `data/admin_token.txt`.
-   Server browser: **http://localhost:30120/hub.html**.
+3. `http://localhost:30120` shows the server status page (no game there — the
+   game is GTA V only). Admin panel: **http://localhost:40120** — token in
+   `data/admin_token.txt`. Server browser: **http://localhost:30120/hub.html**.
 
-## ▶️ Step 2 — GTA V client (Windows, ~5 minutes)
+## ▶️ Step 2 — GTA V client (Windows, ~1 minute)
 
-1. Install the free **Visual Studio 2022 Build Tools** (C++ workload):
-   https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022
-2. Run `client\build.ps1` → produces **MyMP.asi** (~30 seconds).
-3. Run **`launcher\Install & Launch MyMP.bat`** → finds your GTA V, installs the
-   ASI loader, installs MyMP.asi, asks for your server IP, launches the game.
+1. Run **`release/MyMP.exe`** → it installs the ASI loader + `MyMP.asi` into your
+   GTA V folder, asks for your server IP, and launches the game (or copy
+   `MyMP.asi` + `dinput8.dll` manually and run GTA V).
+2. (Optional) rebuild the client yourself: `client\build.ps1` → `MyMP.asi`.
 
-In-game: your vehicle spawns and syncs with everyone else on the server.
+In-game (your own GTA V single-player session, like FiveM): your vehicle spawns
+and syncs with everyone else on the server. `T` = chat, `N` = talk, `P` = players.
 
 ---
 
@@ -58,7 +59,7 @@ In-game: your vehicle spawns and syncs with everyone else on the server.
 | `server/` | your server: netcode (WS+UDP), authoritative world, plugins |
 | `client/` | your GTA V client source (MyMP.asi) + build scripts + native hashes from `citizenfx/natives` |
 | `launcher/` | one-click GTA V setup + launch |
-| `web/` | browser client (canvas world, chat, minimap) |
+| `web/` | server status page + server-browser hub + admin panel (no web game) |
 | `tools/` | test bots + native generator |
 | `*.md` | README, CLIENT guide, API, and the full citizenfx repo audit (REPO_MAP.md) |
 
