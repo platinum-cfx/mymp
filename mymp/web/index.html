@@ -310,6 +310,23 @@ function rotate(px, py, ang){
 }
 
 function drawWorld(dt){
+  // custom map objects (asset streaming lite) — static props
+  ctx.save();
+  for (const e of world.ents.values()) {
+    if ((e.kind || e.k) !== 'obj') continue;
+    const [sx, sy] = project(e.x, e.y);
+    const size = Math.max(5, 18 - (e.x - world.me.x) / 60);
+    ctx.fillStyle = 'rgba(255,159,28,0.5)';
+    ctx.strokeStyle = 'rgba(255,159,28,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate((e.h || 0) * Math.PI / 180);
+    ctx.fillRect(-size / 2, -size / 2, size, size);
+    ctx.strokeRect(-size / 2, -size / 2, size, size);
+    ctx.restore();
+  }
+  ctx.restore();
   // ground
   ctx.fillStyle = '#10151d';
   ctx.fillRect(0, 0, W, H);

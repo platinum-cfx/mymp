@@ -63,7 +63,7 @@ class Entity:
 class Player:
     __slots__ = ("id", "name", "color", "ent", "ws", "udp_addr",
                  "admin", "native", "bucket", "last_seen", "last_chat",
-                 "last_event", "greeted", "acct")
+                 "last_event", "greeted", "acct", "lic")
 
     def __init__(self, pid, name, color, ws=None, udp_addr=None, native=False):
         self.id = pid
@@ -80,6 +80,7 @@ class Player:
         self.last_event = 0.0
         self.greeted = False
         self.acct = None  # persisted account dict (set by accounts plugin)
+        self.lic = ""    # install license identifier (client-generated)
 
 
 class World:
@@ -87,6 +88,8 @@ class World:
         self.cfg = cfg
         self.log = log
         self.players = {}
+        self.objects = {}  # custom map objects: id -> {model,x,y,z,h}
+        self._obj_counter = 5000
         self.bots = {}
         self.by_ws = {}
         self.by_udp = {}
@@ -149,7 +152,7 @@ class World:
             ],
         }
 
-    def join(self, name, color=None, ws=None, udp_addr=None, native=False):
+    def join(self, name, color=None, ws=None, udp_addr=None, native=False, lic=None):
         if len(self.players) >= int(self.cfg.get("sv_maxclients", 64)):
             return None
         pid = self._alloc_id()
@@ -157,6 +160,8 @@ class World:
             color = random.choice(COLORS)
         p = Player(pid, (name or "Player")[:24], color, ws=ws,
                    udp_addr=udp_addr, native=native)
+        if lic:
+            p.lic = str(lic)[:64]
         # legacy admins key + principals-based admin (identifier.name:X -> group.admin)
         admins = [a.strip() for a in self.cfg.get("admins", "").split(",") if a.strip()]
         p.admin = p.name in admins or any(
@@ -286,6 +291,7 @@ class World:
             "name": p.name,
             "color": p.ent.color,
             "admin": p.admin,
+            "lic": p.lic,
             "world": [WORLD_W, WORLD_H],
             "spawn": [p.ent.x, p.ent.y, round(p.ent.heading, 3)],
             "hostname": self.cfg.get("sv_hostname", "MyMP"),
@@ -476,10 +482,36 @@ class World:
                 if e.state:
                     ent["d"] = dict(e.state)  # state bag
                 ents.append(ent)
+            # custom map objects (always in scope — static world props)
+            for oid, o in self.objects.items():
+                ents.append({"i": oid, "k": "obj", "m": o["model"],
+                             "x": round(o["x"], 1), "y": round(o["y"], 1),
+                             "h": round(o["h"], 2),
+                             "z": round(o.get("z", 0.0), 1)})
             self.send(p, {"t": "state", "ts": now, "ents": ents})
 
     # ---------------- voice chat (proximity, like FiveM/alt:V) ----------------
     VOICE_RANGE = 40.0
+
+    # ---------------- custom map objects (asset-streaming lite) ----------------
+    # The server owns a list of world objects (model + position + heading);
+    # every client (web + GTA) spawns them. Plugins manage them via
+    # world.add_object / world.remove_object; the maps plugin exposes
+    # /addobj & /delobj and persists to data/map_objects.json.
+    def add_object(self, model, x, y, z=0.0, heading=0.0):
+        model = (model or "prop_ld_conc_pipes02")[:48]
+        oid = self._next_obj_id()
+        self.objects[oid] = {"model": model, "x": float(x), "y": float(y),
+                             "z": float(z), "h": float(heading)}
+        return oid
+
+    def remove_object(self, oid):
+        return self.objects.pop(oid, None) is not None
+
+    def _next_obj_id(self):
+        oid = getattr(self, "_obj_counter", 5000) + 1
+        self._obj_counter = oid
+        return oid
 
     def handle_voice(self, p, payload):
         """Route one voice packet from p to players in proximity (same bucket,

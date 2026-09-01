@@ -4,7 +4,7 @@ import base64, hashlib, json, os, signal, socket, struct, subprocess, sys, time
 
 HOST, PORT = "127.0.0.1", 30170
 srv = subprocess.Popen([sys.executable, "server/main.py", "--port", str(PORT), "--admin-port", "40140"],
-                       cwd="/home/user/mymp", stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                       cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 def wait_port(port, timeout=10):
     end = time.time() + timeout
     while time.time() < end:

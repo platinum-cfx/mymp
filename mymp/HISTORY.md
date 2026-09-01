@@ -329,3 +329,32 @@ the PE, read own exe tail at runtime — works without resource files or extra
 tooling; verified MZ at both payload offsets. (2) The workspace snapshot caps
 ~128 MB, so the local `.git` must not coexist with the full reference tree —
 clean workspace + GitHub-only workflow is the fix.
+
+## Chapter 15 — License identifiers, custom map objects & the in-game player list (Sep 1, 2026)
+
+The last three roadmap items from the FiveM shape landed in one push:
+
+1. **License-based account identifiers** — the accounts plugin now keys
+   `data/accounts.json` by a Cfx-style install license instead of the player
+   name. The GTA client generates a 24-hex-char license on first launch,
+   persists it in `HKCU\Software\MyMP`, and sends it in the join message
+   (`"lic"`); web/UDP joins carry it too (hello echoes it back). Same license
+   = same account, so colour/vehicle/position follow the install. Clients that
+   send no license fall back to name-keying, so the web client stays playable.
+
+2. **Custom map objects (asset-streaming lite)** — new `maps` plugin with
+   `/addobj <model> [x y]`, `/delobj <id>`, `/objects` and `/clearmap`
+   (ace `command.map`, granted to group.user in the demo server.cfg). Objects
+   persist across restarts in `data/map_objects.json` and stream to every
+   client: the web client draws orange prop markers, the GTA client requests
+   the model, spawns it with `CREATE_OBJECT` (native added to gen_natives.py,
+   now 61 hashes), sets heading + mission-entity flags, and cleans up vanished
+   objects on the next state frame.
+
+3. **In-game player list** — press `P` inside GTA V for a name + HP overlay
+   (drawn with the same scaleform-free text path as chat).
+
+Also this round: regression suite grew to 13 checks (license echo, same-license
+join, license-keyed account file, map-object broadcast) — all pass, plus 5
+health and 4 voice tests. `MyMP.exe` rebuilt (4,321,504 B) with the new
+`MyMP.asi` embedded.

@@ -298,7 +298,9 @@ You asked about V:MP (V-Multiplayer). Good news this time:
 - **GTA client not pre-built** — ✅ **prebuilt now** (`release/MyMP.asi`, cross-compiled PE32+; `build.ps1` still there for custom builds)
 - **Native-table discovery + script hook patterns** are for current GTA V builds; game updates may need pattern updates (documented in `CLIENT.md` / `scriptthread.cpp`)
 - **Combat/death/respawn now sync end-to-end** (damage → death → 4s respawn); GTA-client-side death camera polish is next
-- **Persistence keyed by player name** — a real account/license-identifier system is roadmap
+- **Custom map objects (asset-streaming lite)** — `/addobj`, `/delobj`, `/objects`, `/clearmap`; persisted, rendered in web + GTA client
+- **In-game player list** — press `P` in GTA V for a live name/HP overlay
+- **Persistence keyed by license identifier** (CfX-style, generated per install, `HKCU\Software\MyMP`) — name fallback for clients that send none
 - **Web client is 2D top-down** — it's the browser companion, not a GTA renderer
 
 ---

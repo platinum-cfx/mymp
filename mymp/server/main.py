@@ -116,7 +116,7 @@ def main():
         if p is None:
             if msg.get("t") == "join":
                 world.join(msg.get("name"), msg.get("color"), ws=conn,
-                           native=bool(msg.get("native")))
+                           native=bool(msg.get("native")), lic=msg.get("lic"))
             return
         handle_net_msg(p, msg, "ws")
 
@@ -139,7 +139,7 @@ def main():
         if p is None:
             if msg.get("t") == "join":
                 world.join(msg.get("name"), msg.get("color"), udp_addr=addr,
-                           native=bool(msg.get("native")))
+                           native=bool(msg.get("native")), lic=msg.get("lic"))
             return
         handle_net_msg(p, msg, "udp")
 

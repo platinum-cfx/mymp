@@ -83,6 +83,7 @@ VERIFIED = {
     "CLEAR_ENTITY_LAST_DAMAGE_ENTITY": ("ENTITY", 0xA72CD9CA74A5ECBA, "ClearEntityLastDamageEntity.md"),
     "RESURRECT_PED": ("PED", 0x71BC8E838B9C6035, "ResurrectPed.md"),
     "DISABLE_CONTROL_ACTION": ("PAD", 0xFE99B66D079CF6BC, "DisableControlAction.md"),
+    "CREATE_OBJECT": ("OBJECT", 0x509D5878EB39E842, "CreateObject.md"),
     "ENABLE_CONTROL_ACTION": ("PAD", 0x351220255D64C155, "EnableControlAction.md"),
 }
 

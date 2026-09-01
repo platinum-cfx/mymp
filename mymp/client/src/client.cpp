@@ -41,6 +41,7 @@ struct Config {
     uint16_t port = 30120;
     std::string name = "GTA-Player";
     std::string vehicle = "adder";
+    std::string license;
     int r = 255, g = 159, b = 28;  // default orange
 };
 Config g_cfg;
@@ -146,6 +147,32 @@ void loadConfig() {
                 g_cfg.g = (int)strtol(v.substr(3, 2).c_str(), nullptr, 16);
                 g_cfg.b = (int)strtol(v.substr(5, 2).c_str(), nullptr, 16);
             }
+            else if (k == "license") g_cfg.license = v;
+        }
+    }
+    // install license identifier (Cfx-style): generate once, persist, and the
+    // server keys your account on it so your save follows your install.
+    if (g_cfg.license.empty()) {
+        char lic[32];
+        HKEY hk;
+        if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\MyMP", 0, KEY_READ | KEY_WRITE, &hk) == ERROR_SUCCESS) {
+            DWORD sz = sizeof lic; DWORD type = REG_SZ;
+            if (RegQueryValueExA(hk, "license", NULL, &type, (BYTE*)lic, &sz) == ERROR_SUCCESS &&
+                lic[0] && strlen(lic) == 24) {
+                g_cfg.license = lic;
+            } else {
+                const char* hex = "0123456789abcdef";
+                for (int i = 0; i < 24; i++) lic[i] = hex[rand() % 16];
+                lic[24] = 0;
+                RegSetValueExA(hk, "license", 0, REG_SZ, (BYTE*)lic, 25);
+                g_cfg.license = lic;
+            }
+            RegCloseKey(hk);
+        } else {
+            const char* hex = "0123456789abcdef";
+            for (int i = 0; i < 24; i++) lic[i] = hex[rand() % 16];
+            lic[24] = 0;
+            g_cfg.license = lic;
         }
     }
     fclose(f);
@@ -171,6 +198,10 @@ struct LerpState {
     uint64_t t = 0;
 };
 std::map<uint32_t, LerpState> g_vehLerp, g_pedLerp;
+std::map<uint32_t, uint32_t> g_remoteObjs;  // server object id -> game object handle
+std::map<uint32_t, std::string> g_remoteNames;  // id -> name (player list overlay)
+std::map<uint32_t, int> g_remoteHp;             // id -> hp (player list overlay)
+bool g_playerList = false;
 UdpSocket g_sock;
 
 // ---- in-game chat (FiveM-style: T opens, type, Enter sends, Esc closes) ----
@@ -180,10 +211,11 @@ std::string g_chatBuf;
 std::deque<std::string> g_chatLog;  // last 6 lines drawn on screen
 
 std::string msgJoin() {
-    char buf[512];
+    char buf[640];
     snprintf(buf, sizeof buf,
-             "{\"t\":\"join\",\"name\":\"%s\",\"color\":\"#%02X%02X%02X\",\"native\":1}",
-             mymp::jsonEscape(g_cfg.name).c_str(), g_cfg.r, g_cfg.g, g_cfg.b);
+             "{\"t\":\"join\",\"name\":\"%s\",\"color\":\"#%02X%02X%02X\",\"native\":1,\"lic\":\"%s\"}",
+             mymp::jsonEscape(g_cfg.name).c_str(), g_cfg.r, g_cfg.g, g_cfg.b,
+             g_cfg.license.c_str());
     return buf;
 }
 
@@ -329,6 +361,36 @@ void deleteRemoteVehicle(uint32_t id) {
     g_vehLerp.erase(id);
 }
 
+uint32_t spawnRemoteObject(const Json& e) {
+    std::string model = e.has("m") ? e.get("m")->asStr("prop_ld_conc_pipes02") : "prop_ld_conc_pipes02";
+    uint32_t m = joaat(model);
+    if (!m) return 0;
+    invoke<void>(N_REQUEST_MODEL, (uint64_t)m);
+    for (int i = 0; i < 200 && !invoke<bool>(N_HAS_MODEL_LOADED, (uint64_t)m); ++i)
+        Sleep(20);
+    if (!invoke<bool>(N_HAS_MODEL_LOADED, (uint64_t)m)) return 0;
+    float x = e.has("x") ? (float)e.get("x")->asNum() : 0.0f;
+    float y = e.has("y") ? (float)e.get("y")->asNum() : 0.0f;
+    float z = e.has("z") ? (float)e.get("z")->asNum() : 0.0f;
+    float h = e.has("h") ? (float)e.get("h")->asNum() : 0.0f;
+    uint32_t obj = invoke<uint32_t>(N_CREATE_OBJECT, (uint64_t)m, x, y, z, 1, 0, 1);
+    if (!obj) return 0;
+    invoke<void>(N_SET_ENTITY_HEADING, (uint64_t)obj, h);
+    invoke<void>(N_SET_ENTITY_AS_MISSION_ENTITY, (uint64_t)obj, 1, 1, 1);
+    return obj;
+}
+
+void deleteRemoteObject(uint32_t id) {
+    auto it = g_remoteObjs.find(id);
+    if (it == g_remoteObjs.end()) return;
+    uint32_t obj = it->second;
+    if (invoke<bool>(N_DOES_ENTITY_EXIST, (uint64_t)obj)) {
+        invoke<void>(N_SET_ENTITY_AS_MISSION_ENTITY, (uint64_t)obj, 1, 1, 0);
+        invoke<void>(N_DELETE_ENTITY, (uint64_t)&obj);
+    }
+    g_remoteObjs.erase(it);
+}
+
 // ---------- chat display ----------
 void showHelp(const std::string& text) {
     invoke<void>(N_BEGIN_TEXT_COMMAND_DISPLAY_HELP, (uint64_t)joaat("STRING"));
@@ -363,6 +425,16 @@ void handleMessage(const Json& m) {
             if (!e.has("i")) continue;
             uint32_t id = (uint32_t)e.get("i")->num;
             seen[id] = true;
+            if (e.has("k") && e.get("k")->asStr() == "obj") {
+                // custom map object (asset streaming lite)
+                if (g_remoteObjs.find(id) == g_remoteObjs.end()) {
+                    uint32_t obj = spawnRemoteObject(e);
+                    if (obj) g_remoteObjs[id] = obj;
+                }
+                continue;
+            }
+            if (e.has("n")) g_remoteNames[id] = e.get("n")->asStr("?");
+            if (e.has("hp")) g_remoteHp[id] = (int)e.get("hp")->num;
             int foot = e.has("f") ? (int)e.get("f")->num : 0;
             if (foot) {
                 // player is on foot -> a ped
@@ -453,6 +525,19 @@ void handleMessage(const Json& m) {
             if (seen.find(it->first) == seen.end()) {
                 deleteRemotePed(it->first);
                 it = g_remotePeds.begin();
+            } else ++it;
+        }
+        for (auto it = g_remoteObjs.begin(); it != g_remoteObjs.end();) {
+            if (seen.find(it->first) == seen.end()) {
+                deleteRemoteObject(it->first);
+                it = g_remoteObjs.begin();
+            } else ++it;
+        }
+        for (auto it = g_remoteNames.begin(); it != g_remoteNames.end();) {
+            if (seen.find(it->first) == seen.end()) {
+                uint32_t gone = it->first;
+                g_remoteNames.erase(it++);
+                g_remoteHp.erase(gone);
             } else ++it;
         }
     } else if (t == "event") {
@@ -629,6 +714,33 @@ void chatDisplay() {
         drawTextLine(*it, y);
 }
 
+// ---------- player list overlay (P key) ----------
+void pollPlayerList() {
+    if (GetAsyncKeyState('P') & 1) g_playerList = !g_playerList;
+}
+
+void playerListDisplay() {
+    if (!g_playerList || !g_joined) return;
+    float n = (float)g_remoteNames.size();
+    float h = 0.034f * n + 0.06f;
+    invoke<void>(N_DRAW_RECT, 0.87f, 0.5f, 0.26f, h, 0, 0, 0, 170);
+    float y = 0.5f - h / 2 + 0.035f;
+    invoke<void>(N_SET_TEXT_FONT, 0ULL);
+    invoke<void>(N_SET_TEXT_SCALE, 0.45f, 0.45f);
+    invoke<void>(N_SET_TEXT_COLOUR, 255, 159, 28, 255);
+    invoke<void>(N_SET_TEXT_OUTLINE);
+    invoke<void>(N_BEGIN_TEXT_COMMAND_DISPLAY_TEXT, (uint64_t)joaat("STRING"));
+    invoke<void>(N_ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, (uint64_t)"Players");
+    invoke<void>(N_END_TEXT_COMMAND_DISPLAY_TEXT, 0.76f, y);
+    y += 0.04f;
+    for (auto& kv : g_remoteNames) {
+        int hp = g_remoteHp.count(kv.first) ? g_remoteHp[kv.first] : 100;
+        std::string line = kv.second + "  [" + std::to_string(hp) + "%]";
+        drawTextLine(line, y);
+        y += 0.034f;
+    }
+}
+
 // ---------- remote-entity interpolation (per tick) ----------
 // GTA:Network (MIT) design: render between snapshots on a short delay, not by
 // snapping to each 10 Hz update. Exponential chase toward the stored target +
@@ -716,6 +828,8 @@ void clientTick() {
         applyRemoteLerp();  // smooth remote entities every frame
         pollChatInput();
         chatDisplay();
+        pollPlayerList();
+        playerListDisplay();
     }
     // --- report own state at 10 Hz ---
     uint64_t now = GetTickCount64();

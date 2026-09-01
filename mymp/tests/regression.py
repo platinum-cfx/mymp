@@ -3,9 +3,10 @@
 import base64, hashlib, json, os, signal, socket, struct, subprocess, sys, time, urllib.request
 
 HOST, PORT, APORT = "127.0.0.1", 30141, 40121
+SRV = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 srv = subprocess.Popen(
     [sys.executable, "server/main.py", "--port", str(PORT), "--admin-port", str(APORT)],
-    cwd="/home/user/mymp", stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 def wait_port(port, timeout=10):
     end = time.time() + timeout
@@ -89,7 +90,28 @@ while time.time() < deadline:
 check("bucket isolation", not saw)
 send_frame(b, {"t": "chat", "msg": "/instance 0"}); drain(b, 0.5)
 
-token = open("/home/user/mymp/data/admin_token.txt").read().strip()
+# --- license identifiers: same lic = same account; state carries lic back ---
+c = ws_connect(); send_frame(c, {"t": "join", "name": "Carol", "color": "#69f0ae", "lic": "lic_test_abc123"})
+hc = recv_until(c, "hello"); check("lic echoed in hello", hc and hc.get("lic") == "lic_test_abc123")
+d = ws_connect(); send_frame(d, {"t": "join", "name": "Dave", "color": "#40c4ff", "lic": "lic_test_abc123"})
+hd = recv_until(d, "hello"); check("same lic joins", hd and hd.get("lic") == "lic_test_abc123")
+drain(c, 0.4); drain(d, 0.4)
+send_frame(c, {"t": "state", "x": 12.0, "y": 34.0})
+time.sleep(0.5)
+acc = json.load(open(os.path.join(SRV, "data", "accounts.json"), encoding="utf-8"))
+check("account keyed by license", "lic_test_abc123" in acc and acc["lic_test_abc123"]["name"] in ("Carol", "Dave"))
+drain(d, 0.5)
+send_frame(c, {"t": "chat", "msg": "/addobj prop_dumpster_02a 5 5"})
+saw_obj = False; deadline = time.time() + 3
+while time.time() < deadline:
+    for m in drain(c, 0.3):
+        if m.get("t") == "state" and any((e.get("kind") or e.get("k")) == "obj" for e in m.get("ents", [])): saw_obj = True
+check("map object broadcast", saw_obj)
+send_frame(c, {"t": "chat", "msg": "/clearmap"})
+send_frame(d, {"t": "chat", "msg": "/instance 0"})
+drain(c, 0.4); drain(d, 0.4)
+
+token = open(os.path.join(SRV, "data", "admin_token.txt")).read().strip()
 req = urllib.request.Request(f"http://{HOST}:{APORT}/api/action",
     data=json.dumps({"action": "announce", "msg": "regression ok"}).encode(),
     headers={"Content-Type": "application/json", "X-MyMP-Token": token})

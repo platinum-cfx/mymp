@@ -280,10 +280,19 @@ python3 voice.py         # 4/4 — proximity voice routing, volume fade
 
 ## 🗺 Roadmap (what's next)
 
+✅ **Done this round:**
+- **License-based account identifiers** — every install generates a Cfx-style
+  license (stored in `HKCU\Software\MyMP`), sent on join; accounts persist by
+  license, so your colour/vehicle/position follow your install, not your name
+- **Asset streaming (lite) — custom map objects** — `/addobj <model> [x y]`,
+  `/delobj <id>`, `/objects`, `/clearmap`; props persist to
+  `data/map_objects.json` and render in the web client *and* in GTA V
+- **In-game player list** — press `P` in GTA V for a live name/HP overlay
+
+Still open:
 - Opus voice + GTA-client mic (WASAPI)
-- Asset streaming (custom maps / vehicles / clothing)
-- In-game GUI polish (NUI-style), player list, settings
-- License-based account identifiers
+- Asset streaming (vehicles / clothing)
+- In-game GUI polish (NUI-style), settings
 - Deeper native coverage (gameplay: tasks, cameras, animations)
 - Scale testing toward 100+ players (budgets/streaming already OneSync-style)
 
