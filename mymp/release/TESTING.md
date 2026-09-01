@@ -25,12 +25,11 @@ You should see `MyMP server running` + `TCP/UDP … 30120`. Keep it running.
 
 ## Install & launch
 
-**Easiest (alt:V/FiveM style):** double-click **MyMP-Launcher.exe** — a real
-window with a **Server Browser**: Refresh to list servers from the master list
-(`server/registry.py` on :30130), click one, then **Launch GTA V**. It installs
-the client files into your GTA folder, writes mymp.ini, and starts the game.
-
-**Also easy:** double-click **MyMP-Setup.exe** (same folder as this file) — it
+**Easiest (FiveM style):** double-click **MyMP.exe** — ONE file that does
+everything: it carries the client (`MyMP.asi`) and ASI loader (`dinput8.dll`)
+inside itself, installs them into your GTA V folder, configures mymp.ini, and
+launches the game. The window has a **Server Browser** (master list) and
+one-click **Launch GTA V**. (same folder as this file) — it
 finds your GTA folder, installs `MyMP.asi` + `dinput8.dll`, asks for server/
 name/vehicle, and launches GTA V. (The old manual steps below still work.)
 

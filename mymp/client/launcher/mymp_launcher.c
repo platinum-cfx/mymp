@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #define ID_LIST    1001
 #define ID_MASTER  1002
@@ -164,8 +165,55 @@ static void copyIfExists(const char* src, const char* dst) {
     else statusf("  !! copy failed (%lu)", GetLastError());
 }
 
+/* ---- embedded payload: MyMP.asi + dinput8.dll appended to this exe ----
+   MyMP.exe is a single self-extracting file (FiveM.exe-style): it carries the
+   client + ASI loader inside itself and extracts them into the GTA folder. */
+typedef struct { char magic[8]; uint64_t asioff, asilen, dlloff, dlllen; } PayloadHdr;
+
+static int loadPayloadHdr(PayloadHdr* h) {
+    char path[MAX_PATH]; DWORD n = GetModuleFileNameA(NULL, path, sizeof path);
+    if (!n) return 0;
+    FILE* f = fopen(path, "rb"); if (!f) return 0;
+    if (fseek(f, -(long)sizeof(PayloadHdr), SEEK_END)) { fclose(f); return 0; }
+    PayloadHdr t; if (fread(&t, 1, sizeof t, f) != sizeof t) { fclose(f); return 0; }
+    fclose(f);
+    if (memcmp(t.magic, "MYMPXSE1", 8)) return 0;
+    *h = t; return 1;
+}
+
+static int extractTo(const char* dst, uint64_t off, uint64_t len) {
+    char path[MAX_PATH]; DWORD n = GetModuleFileNameA(NULL, path, sizeof path);
+    if (!n) return 0;
+    FILE* in = fopen(path, "rb"); if (!in) return 0;
+    FILE* out = fopen(dst, "wb"); if (!out) { fclose(in); return 0; }
+    if (fseek(in, (long)off, SEEK_SET)) { fclose(in); fclose(out); return 0; }
+    char buf[65536]; uint64_t left = len; int ok = 1;
+    while (left) {
+        size_t want = left > sizeof buf ? sizeof buf : (size_t)left;
+        size_t r = fread(buf, 1, want, in);
+        if (r != want) { ok = 0; break; }
+        if (fwrite(buf, 1, r, out) != r) { ok = 0; break; }
+        left -= r;
+    }
+    fclose(in); fclose(out);
+    if (!ok) DeleteFileA(dst);
+    return ok;
+}
+
 static void installClient(const char* gta) {
-    char src[2048], dst[2048];
+    PayloadHdr h;
+    char dst[2048];
+    if (loadPayloadHdr(&h)) {
+        pathJoin(dst, sizeof dst, gta, "MyMP.asi");
+        if (extractTo(dst, h.asioff, h.asilen)) statusf("  + MyMP.asi (from MyMP.exe)");
+        else statusf("  !! extract MyMP.asi failed");
+        pathJoin(dst, sizeof dst, gta, "dinput8.dll");
+        if (extractTo(dst, h.dlloff, h.dlllen)) statusf("  + dinput8.dll (from MyMP.exe)");
+        else statusf("  !! extract dinput8.dll failed");
+        return;
+    }
+    /* dev fallback: files beside this exe */
+    char src[2048];
     pathJoin(src, sizeof src, g_exeDir, "MyMP.asi");   pathJoin(dst, sizeof dst, gta, "MyMP.asi");
     copyIfExists(src, dst);
     pathJoin(src, sizeof src, g_exeDir, "dinput8.dll"); pathJoin(dst, sizeof dst, gta, "dinput8.dll");

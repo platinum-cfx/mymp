@@ -43,7 +43,7 @@ list of servers) to see live player counts and join — every server exposes
 `/info.json` for discovery.
 
 **Get it (GTA first, no sandbox):**
-1. Run **MyMP-Setup.exe** — it finds your GTA V folder, installs the client
+1. Run **MyMP.exe** (single file) — it finds your GTA V folder, installs the client
    (`MyMP.asi` + ASI loader), configures your server/name/vehicle, launches GTA.
 2. Run the server: unzip **MyMP-Server-Artifacts.zip** → double-click
    `run_server.bat` (Python 3.10+ required) — like FiveM's FXServer artifacts.

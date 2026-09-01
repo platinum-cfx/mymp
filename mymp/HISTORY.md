@@ -309,3 +309,23 @@ shape for the web client.
 its own `elif opcode == 0x2` branch, NOT inside the text branch — binary frames
 silently vanished until fixed. (3) Browser mic requires a secure context
 (localhost ok; production needs HTTPS or a signed page).
+
+## Chapter 14 — Single-file MyMP.exe + GitHub home (Sep 1, 2026)
+
+**What we built:** `MyMP.exe` — ONE self-extracting Windows exe (4.2 MB,
+PE32+ GUI, cross-compiled): the launcher with server browser + connect +
+Launch GTA V, and it carries `MyMP.asi` + `dinput8.dll` appended inside itself
+(payload header `MYMPXSE1` with offsets; extracted into the GTA folder on
+install). Replaces the two-file setup+launcher split — the FiveM.exe ritual:
+download one file, double-click, play. `release/` is now just MyMP.exe +
+mymp.ini + TESTING.md + bat.
+
+**Repo:** `github.com/platinum-cfx/mymp` — created private, pushed (2,039
+files), then made **public**. From now on GitHub is the source of truth; the
+Arena workspace is kept clean (clone/push via token when working).
+
+**Engineering notes:** (1) self-extracting = append payload + 40-byte header to
+the PE, read own exe tail at runtime — works without resource files or extra
+tooling; verified MZ at both payload offsets. (2) The workspace snapshot caps
+~128 MB, so the local `.git` must not coexist with the full reference tree —
+clean workspace + GitHub-only workflow is the fix.

@@ -240,8 +240,8 @@ ecosystem code (resources, maps, tools, docs) — and we're mining all of it.
 
 | FiveM piece | MyMP now has |
 |---|---|
-| Installer exe (`FiveM.exe` — installs client) | **`MyMP-Setup.exe`** (cross-compiled, 191 KB PE32+): finds GTA V via Steam/Rockstar registry, copies `MyMP.asi` + `dinput8.dll` + writes `mymp.ini`, launches GTA via `steam -applaunch 271590` — one double-click |
-| GUI launcher (the alt:V/FiveM blue window) | **`MyMP-Launcher.exe`** (196 KB, Win32 GUI, cross-compiled): **Server Browser** (live master list via WinHTTP) → pick a server → connect settings (IP/port/name/vehicle/colour) → **Launch GTA V** (installs client files + writes mymp.ini + starts game). Source: `client/launcher/mymp_launcher.c` |
+| Installer exe (`FiveM.exe` — installs client) | **`MyMP.exe`** — ONE self-extracting file (4.2 MB): carries the client + ASI loader inside itself, installs into GTA folder, writes `mymp.ini`, launches GTA via `steam -applaunch` |
+| GUI launcher (the FiveM window) | built into **`MyMP.exe`** (Win32 GUI): **Server Browser** (live master list via WinHTTP) → pick a server → connect settings → **Launch GTA V**. Source: `client/launcher/mymp_launcher.c` |
 | Master list (Cfx-portal equivalent) | `server/registry.py` — hub page + JSON list on :30130; servers self-announce via `sv_masterlist` (10 s heartbeat, 25 s TTL) |
 | Server artifacts (`FXServer` zip → run) | **`MyMP-Server-Artifacts.zip`** — `run_server.bat` + `server.cfg` + server + web (26 files, 38 KB) |
 | Source | `MyMP-Platform.zip` (source + docs + reference/, 74+ files) |

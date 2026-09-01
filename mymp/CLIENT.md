@@ -15,7 +15,7 @@ the server relays it to everyone else).
 
 ## 🚀 Install (the easy way — FiveM-style)
 
-Run **MyMP-Setup.exe** from the release folder: it finds your GTA V folder
+Run **MyMP.exe** (single self-contained file) from the release folder: it finds your GTA V folder
 (Steam / Rockstar registry), copies `MyMP.asi` + `dinput8.dll` in, asks for
 your server/name/vehicle and writes `mymp.ini`, then launches GTA V for you
 (via `steam -applaunch 271590` when Steam is detected). Re-run it any time to
