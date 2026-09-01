@@ -20,11 +20,18 @@
 
 ## 📖 What is MyMP?
 
-**MyMP is a complete multiplayer framework for GTA V** — the same *kind* of thing as
-FiveM, alt:V, GT-MP, or RAGE:MP: your own dedicated server, your own game client
-that runs inside GTA V, your own protocol, and your own scripting system. You run
-the server, your friends double-click one exe, and everyone drives around the same
-world together.
+**MyMP is a GTA V multiplayer mod — like FiveM or alt:V, not a sandbox.** You run
+your own dedicated server, your friends double-click one exe, and your real
+GTA V copies (legitimately owned, modded by an ASI plugin) are synced together:
+everyone drives, talks and plays in the same world **inside GTA V itself**.
+
+The browser map you may have seen in screenshots is *not* the game — it is the
+companion (server browser + lightweight lobby view, like FiveM's server list).
+The actual game is `MyMP.asi` running inside GTA5.exe: your real vehicle, ped,
+position, health, weapons and voice, synced to everyone on the server.
+
+You run the server, your friends double-click one exe, and everyone drives around
+the same world together.
 
 **The important part: MyMP is not a fork and not a wrapper.** Everything —
 netcode, server simulation, plugin system, launcher, installer, and the in-game
@@ -50,13 +57,13 @@ licenses kept on file.
 | Server-authoritative world sync (OneSync-style: buckets, range culling, per-player entity budgets) | ✅ |
 | **GTA V client** (`MyMP.asi`): spawn your car, see other players' real vehicles & on-foot peds, smooth interpolation | ✅ |
 | In-game chat (**T** to type, Enter sends, Esc closes) with on-screen log | ✅ |
-| Health / armour / weapon sync (60 verified natives, crossmap-verified hashes) | ✅ |
+| Health / armour / weapon sync (61 verified natives, crossmap-verified hashes) | ✅ |
 | **Combat**: damage reporting → server-routed → death → 4 s respawn + kill feed | ✅ |
-| **Proximity voice chat** (web client): mic → server routes by distance, volume fades | ✅ |
+| **Proximity voice chat — in GTA V and browser**: WASAPI mic (hold `N`), Opus codec, distance-faded, GTA↔browser compatible | ✅ |
 | State bags (`world.set_state` / `get_state`) synced to nearby players | ✅ |
 | Permissions (**aces / principals** — same model as FiveM's ACL) | ✅ |
 | Events (client↔server) + server-side event bus | ✅ |
-| Persistence / accounts (name-keyed; license-ID next) | ✅ |
+| Persistence / accounts — keyed by per-install license identifier (Cfx-style), colour/vehicle/position follow you | ✅ |
 | Admin panel (txAdmin-style) on :40120 | ✅ |
 | **Master list** + server browser (registry service + hub page) | ✅ |
 | **MyMP.exe** — one self-extracting file: installs the client into GTA, writes config, launches the game | ✅ |
