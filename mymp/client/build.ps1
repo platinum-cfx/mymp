@@ -55,7 +55,7 @@ foreach ($cpp in @("lglm.cpp", "libs\glm-binding\lglmlib.cpp")) {
 
 # --- 2. Client + scripting runtime (Lua includes are C++-linked, no extern "C") ---
 $cmd = "`"$vcvars`" && cl /nologo /O2 /EHsc /MD /W3 /D_CRT_SECURE_NO_WARNINGS /DLUA_INCLUDE_LIBGLM " +
-       "/I`"$src`" " +
+       "/I`"$src`" /I`"$lua`" /I`"$lua\libs`" /I`"$lua\libs\glm-binding`" " +
        "`"$src\net.cpp`" `"$src\scriptthread.cpp`" `"$src\client.cpp`" " +
        "`"$src\script_rt.cpp`" `"$src\http_get.cpp`" `"$src\json.cpp`" `"$src\lua_native_bindings.cpp`" " +
        ($luaObjs -join " ") +

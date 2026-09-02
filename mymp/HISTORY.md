@@ -495,3 +495,41 @@ Shipped (server side + Lua runtime + tests, `mymp/server` and
   and `tests/script_rt_test.cpp` (12 Lua-runtime tests, runs on Linux CI).
 - C++/JS/C# runtimes and a UI framework layer (like FiveM's NUI) remain
   roadmap; the Lua runtime is the foundation they plug into.
+
+## Chapter 21 — ~6,000 natives as FiveM-style Lua globals (Sep 1, 2026)
+
+Owner directive: *"Start with number 3"* — the ~6,000-native table (the
+follow-up to client-side scripting), done as real FiveM-style global native
+functions with full Vector3 parity.
+
+What shipped (generator + runtime + tests, pushed):
+- **FiveM-style native cache.** Every one of the 6,302 typed bindings is
+  registered as a Lua *global* at runtime init, under both names: the
+  SNAKE_CASE lookup name (`PLAYER_PED_ID`) and the FiveM docs name
+  (`PlayerPedId`). Scripts now call `PlayerPedId()`, `GetEntityCoords(ped,
+  false)` etc. directly, exactly like FiveM Lua. `mymp.native(name|'0x…')`
+  still works for all 6,302 (hashes must be strings — Lua numbers are doubles).
+- **Vector3 parity with LuaGLM.** 55 natives returning `Vector3` (e.g.
+  GET_ENTITY_COORDS) now return a real LuaGLM `vec3` userdata instead of
+  nothing. 49 `Vector3*` out-params (e.g. GET_PED_LAST_WEAPON_IMPACT_COORD)
+  return the filled vector as an **extra return value**, FiveM-style:
+  `local ok, coords = GetPedLastWeaponImpactCoord(ped)`. Marshaling goes
+  through the vendored LuaGLM bridge (`glm_pushvec3` / `glm_tovec3`).
+- **All pointer out-params covered, no more "unsupported parameter type"
+  errors.** `float*` (48), `Hash*`/`Entity*`/`Ped*`/`Vehicle*`/`Object*`/
+  `Blip*`/`ScrHandle*`/`int*` (~300) and `BOOL*` (20) out-params return their
+  values as extra Lua return values; `Any*` passes through as an opaque
+  integer; `char*` (763) are string inputs; 68 `char*`-returning natives
+  (e.g. GET_DISPLAY_NAME_FROM_VEHICLE_MODEL) now return Lua strings.
+- **FiveM type parity details**: BOOL params accept booleans/numbers/nil;
+  BOOL-returning natives return Lua booleans (1,460 natives); pointer
+  out-params are optional (omitted → zero-initialized); arity errors name
+  only required (non-pointer) args.
+- Generator (`tools/gen_native_bindings.py`) upgraded: it carries the docs
+  TitleCase name, classifies the full pointer-type zoo, and emits the
+  out-param write-back; the 74k-line `lua_native_bindings.cpp` is fully
+  regenerated (still never hand-edited).
+- Tests: `tests/script_rt_test.cpp` now 16/16, adding FiveM-style global
+  calls, vec3 return, vec3*/float*/Hash*/BOOL* out-param returns, and a
+  string-returning native — all against the real Cfx Lua VM with mocked
+  native slots.

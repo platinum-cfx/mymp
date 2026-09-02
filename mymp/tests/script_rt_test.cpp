@@ -3,10 +3,12 @@
 // mymp.send / mymp.print / mymp.native (via a mock native table) end-to-end.
 //
 // Build (from repo root):
-//   g++ -O1 -std=c++17 -Iclient/src tests/script_rt_test.cpp \
+//   g++ -O1 -std=c++17 -DLUA_INCLUDE_LIBGLM \
+//       -Iclient/src -Iclient/src/lua -Iclient/src/lua/libs \
+//       -Iclient/src/lua/libs/glm-binding tests/script_rt_test.cpp \
 //       client/src/script_rt.cpp client/src/json.cpp \
 //       client/src/lua_native_bindings.cpp \
-//       -DLUA_INCLUDE_LIBGLM /tmp/liblua-cfx.a -o /tmp/script_rt_test -ldl -lm
+//       /tmp/liblua-cfx.a -o /tmp/script_rt_test -ldl -lm
 // (liblua-cfx.a = the vendored Cfx Lua 5.4.4 + LuaGLM, built as C++ like
 //  FiveM: g++ -c -x c++ -std=c++17 -DLUA_INCLUDE_LIBGLM [flags] l*.c lglm.cpp
 //  libs/glm-binding/lglmlib.cpp)
@@ -25,6 +27,50 @@ uint64_t (*g_nativeTable[256][256])();
 
 // mock native: PLAYER_PED_ID returns 42
 static uint64_t mockPlayerPedId() { return 42ull; }
+
+// mock Vector3 layout (matches LuaVector3 in the generated bindings)
+struct MockVec3 { float x, y, z; };
+
+// mock GET_ENTITY_COORDS: writes fixed coords through the hidden out-ptr
+static void mockGetEntityCoords(uint64_t entity, uint64_t alive, MockVec3* out) {
+    (void)entity; (void)alive;
+    if (out) { out->x = 1.5f; out->y = -2.5f; out->z = 3.25f; }
+}
+
+// mock GET_PED_LAST_WEAPON_IMPACT_COORD: fills the vec3 in place, returns 1
+static uint64_t mockLastWeaponImpact(uint64_t ped, MockVec3* out) {
+    (void)ped;
+    if (out) { out->x = 7.f; out->y = 8.f; out->z = 9.f; }
+    return 1ull;
+}
+
+// mock GET_DISPLAY_NAME_FROM_VEHICLE_MODEL: returns a string
+static const char* mockDisplayName(uint64_t model) {
+    (void)model;
+    return "ADDER";
+}
+
+// mock GET_GROUND_Z_FOR_3D_COORD: float* out-param
+static uint64_t mockGroundZ(float x, float y, float z, float* out) {
+    (void)x; (void)y; (void)z;
+    if (out) *out = 25.5f;
+    return 1ull;
+}
+
+// mock GET_CURRENT_PED_WEAPON: Hash* out-param
+static uint64_t mockCurrentWeapon(uint64_t ped, int32_t* out, uint64_t p2) {
+    (void)ped; (void)p2;
+    if (out) *out = 0x2BE6766B;  // WEAPON_PISTOL
+    return 1ull;
+}
+
+// mock GET_VEHICLE_LIGHTS_STATE: two BOOL* out-params
+static uint64_t mockLightsState(uint64_t vehicle, int32_t* on, int32_t* hi) {
+    (void)vehicle;
+    if (on) *on = 1;
+    if (hi) *hi = 0;
+    return 1ull;
+}
 
 static std::vector<std::string> g_prints;
 static std::vector<std::pair<std::string, std::string>> g_sent;
@@ -47,6 +93,30 @@ int main() {
     g_nativeTable[(h >> 8) & 0xFF][h & 0xFF] = mockPlayerPedId;
     printf("mock slot installed for PLAYER_PED_ID 0x%016llX\n",
            (unsigned long long)h);
+    // install mocks through the slot union (function-pointer bit cast)
+    auto putSlot = [](uint64_t hash, uint64_t (*fn)()) {
+        g_nativeTable[(hash >> 8) & 0xFF][hash & 0xFF] = fn;
+    };
+    union { void (*vec3get)(uint64_t, uint64_t, MockVec3*); uint64_t (*slot)(); } ug;
+    ug.vec3get = mockGetEntityCoords;
+    putSlot(0x3FEF770D40960D5AULL, ug.slot);            // GET_ENTITY_COORDS
+    union { uint64_t (*impact)(uint64_t, MockVec3*); uint64_t (*slot)(); } uw;
+    uw.impact = mockLastWeaponImpact;
+    putSlot(0x6C4D0409BA1A2BC2ULL, uw.slot);            // GET_PED_LAST_WEAPON_IMPACT_COORD
+    union { const char* (*dn)(uint64_t); uint64_t (*slot)(); } ud;
+    ud.dn = mockDisplayName;
+    putSlot(0xB215AAC32D25D019ULL, ud.slot);            // GET_DISPLAY_NAME_FROM_VEHICLE_MODEL
+    union { uint64_t (*gz)(float, float, float, float*); uint64_t (*slot)(); } uGz;
+    uGz.gz = mockGroundZ;
+    putSlot(0xC906A7DAB05C8D2BULL, uGz.slot);            // GET_GROUND_Z_FOR_3D_COORD
+    union { uint64_t (*cw)(uint64_t, int32_t*, uint64_t); uint64_t (*slot)(); } uCw;
+    uCw.cw = mockCurrentWeapon;
+    putSlot(0x3A87E44BB9A01D54ULL, uCw.slot);            // GET_CURRENT_PED_WEAPON
+    union { uint64_t (*ls)(uint64_t, int32_t*, int32_t*); uint64_t (*slot)(); } uLs;
+    uLs.ls = mockLightsState;
+    putSlot(0xB91B4C20085BD12FULL, uLs.slot);            // GET_VEHICLE_LIGHTS_STATE
+    printf("mock slots installed (vec3/string/float/hash/bool outs)\n");
+    printf("mock slots installed for GET_ENTITY_COORDS + last-weapon-impact\n");
 
     mymp::ScriptHost host;
     host.print = onPrint;
@@ -138,6 +208,54 @@ int main() {
                             "\nmymp.print('vec3 math OK: ' .. tostring(v))\n";
         std::string err3;
         check(rt.loadResource("vec3test", code3, err3), "LuaGLM vec3 math runs");
+    }
+
+    // ---- native cache: FiveM-style direct global calls + vec3 marshaling ----
+    {
+        std::string code4 =
+            "local ped = PlayerPedId()\n"                       // FiveM-style global
+            "assert(ped == 42, 'PlayerPedId global')"
+            "\nassert(PLAYER_PED_ID ~= nil, 'snake-case alias also global')"
+            "\nlocal c = GetEntityCoords(ped, false)"           // vec3 return
+            "\nassert(type(c) == 'userdata' or c.x ~= nil)"
+            "\nassert(math.abs(c.x - 1.5) < 1e-4 and math.abs(c.y + 2.5) < 1e-4"
+            " and math.abs(c.z - 3.25) < 1e-4, 'GetEntityCoords vec3')"
+            "\nlocal ok, hit = GetPedLastWeaponImpactCoord(ped)" // vec3* out -> 2nd return
+            "\nassert(ok == true, 'impact bool')"
+            "\nassert(math.abs(hit.x - 7) < 1e-4 and math.abs(hit.y - 8) < 1e-4"
+            " and math.abs(hit.z - 9) < 1e-4, 'impact vec3 out-param returned')"
+            "\nmymp.print('native cache OK: ped=' .. tostring(ped) .. ' coords=' .. tostring(c))\n";
+        std::string err4;
+        check(rt.loadResource("nativecache", code4, err4), "native cache: globals + vec3 in/out");
+        if (!err4.empty()) printf("  err: %s\n", err4.c_str());
+    }
+    {
+        // hash-based dispatch still works alongside the globals
+        // (64-bit hashes must be passed as strings — Lua numbers are doubles)
+        std::string code5 =
+            "local ped = mymp.native('0xD80958FC74E988A6')\n"
+            "assert(ped == 42, 'mymp.native hash')"
+            "\nlocal ped2 = mymp.native('PLAYER_PED_ID')"
+            "\nassert(ped2 == 42, 'mymp.native name')\n";
+        std::string err5;
+        check(rt.loadResource("nativecache2", code5, err5), "mymp.native hash+name still work");
+        if (!err5.empty()) printf("  err: %s\n", err5.c_str());
+    }
+    {
+        // pointer out-params (string/float*/Hash*/BOOL*) come back as extra
+        // return values, FiveM-style
+        std::string code6 =
+            "local name = GetDisplayNameFromVehicleModel(0xB779A091)\n"
+            "assert(name == 'ADDER', 'string return')"
+            "\nlocal okz, z = GetGroundZFor_3dCoord(0, 0, 0, 0.0)"
+            "\nassert(okz == true and math.abs(z - 25.5) < 1e-4, 'float* out-param')"
+            "\nlocal okw, wh = GetCurrentPedWeapon(42, 0, true)"
+            "\nassert(okw == true and wh == 0x2BE6766B, 'Hash* out-param')"
+            "\nlocal ret, on, hi = GetVehicleLightsState(42)"
+            "\nassert(ret == true and on == true and hi == false, 'BOOL* out-params')\n";
+        std::string err6;
+        check(rt.loadResource("ptrs", code6, err6), "pointer out-params return extra values");
+        if (!err6.empty()) printf("  err: %s\n", err6.c_str());
     }
 
     printf(g_failures ? "\nSCRIPT RT TEST FAILED (%d)\n" : "\nSCRIPT RT TEST PASSED\n",

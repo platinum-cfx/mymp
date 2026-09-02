@@ -38,15 +38,23 @@ def classify(t):
         base = t[:-1].strip()
         if base == "const char" or base == "char":
             return "string"
-        if base == "Vector3":
-            return "vecout"
-        return "unsupported"
+        if base in ("Vector3", "const Vector3"):
+            return "vecoutptr"          # Vector3* (out) param
+        if base == "float":
+            return "floatptr"           # float* out-param
+        if base == "BOOL":
+            return "boolptr"            # BOOL* out-param
+        if base == "Any":
+            return "anyptr"             # Any* opaque pointer value
+        return "intptr"                 # int*/Hash*/Entity*/Ped*/... out-params
     if t == "float":
         return "float"
+    if t == "Vector3":
+        return "vec3"                   # Vector3 return (hidden out-ptr) or value param
     if t in INTISH:
         return "int"
-    if t.startswith(INTISH_PREFIX) or t in ("char", "Vector3"):
-        return "int" if t == "char" else "unsupported"
+    if t.startswith(INTISH_PREFIX) or t == "char":
+        return "int"
     return "int"  # unknown types are almost always enum/int — keep coverage
 
 
@@ -85,9 +93,10 @@ def parse_param(p):
 
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else "/tmp/natives-repo"
-    natives = []       # (name, hash, ret, params)
+    natives = []       # (name, docName, hash, ret, params)
     skipped = []
     by_name = {}
+    by_doc = {}
     for dirpath, _dirs, files in os.walk(root):
         for fn in files:
             if not fn.endswith(".md"):
@@ -98,6 +107,7 @@ def main():
             except OSError:
                 continue
             name = None
+            docName = fn[:-3] if fn.endswith(".md") else fn  # FiveM TitleCase name
             for line in text.splitlines():
                 if line.startswith("## "):
                     parts = line[3:].strip().split()
@@ -128,8 +138,11 @@ def main():
             params = split_params(sm.group("params"))
             if name in by_name:
                 continue
+            if docName in by_doc:   # same TitleCase name for two natives
+                continue
             by_name[name] = h
-            natives.append((name, h, ret, params))
+            by_doc[docName] = h
+            natives.append((name, docName, h, ret, params))
 
     natives.sort(key=lambda kv: kv[0].lower())
     lines = []
@@ -139,10 +152,8 @@ def main():
     W("// Typed Lua bindings for every documented GTA V script native — the same")
     W("// approach FiveM uses (generated native wrappers). Hashes/types are factual")
     W("// game data; the call path is our own runtime-discovered native table.")
-    W("extern \"C\" {")
     W("#include \"lua/lua.h\"")
     W("#include \"lua/lauxlib.h\"")
-    W("}")
     W("#include \"natives.h\"")
     W("#include \"natives_full.h\"")
     W("#include \"lua_native_bindings.h\"")
@@ -151,8 +162,8 @@ def main():
     W("struct LuaVector3 { float x, y, z; };")
     W("")
 
-    bindings = []  # (name, hash)
-    for name, h, ret, params in natives:
+    bindings = []  # (name, docName, hash)
+    for name, docName, h, ret, params in natives:
         cls_ret = classify(ret)
         if cls_ret == "unsupported":
             cls_ret = "int" if ret in ("Any",) else "void"
@@ -167,62 +178,122 @@ def main():
                 has_varargs = True
                 continue
             cls = classify(t)
-            plist.append((pn or f"a{i + 1}", cls, i + 1))
+            plist.append((pn or f"a{i + 1}", cls, i + 1, t))
         fixed = plist
 
-        bindings.append((name, h))
+        bindings.append((name, docName, h))
         fn_name = "luaN_" + re.sub(r"[^A-Za-z0-9_]", "_", name)
         W(f"// {name}  0x{h:016X}")
         W(f"static int {fn_name}(lua_State* L) {{")
-        if fixed:
+        required = [c for c in fixed if c[1] not in ("vecoutptr", "floatptr", "boolptr", "intptr", "anyptr")]
+        if required:
             W(f"    const int n = lua_gettop(L);")
-            W(f"    if (n < {len(fixed)}) return luaL_error(L, \"{name}: expected at least {len(fixed)} args, got %d\", n);")
+            reqw = "arg" if len(required) == 1 else "args"
+            W(f"    if (n < {len(required)}) return luaL_error(L, \"{name}: expected at least {len(required)} {reqw}, got %d\", n);")
         cargs = []
-        for cname, cls, idx in fixed:
+        retlines = []  # code pushed AFTER the call: pointer out-params
+        for cname, cls, idx, t in fixed:
             if cls == "float":
                 W(f"    float {cname} = (float)luaL_checknumber(L, {idx});")
                 cargs.append(cname)
             elif cls == "string":
                 W(f"    const char* {cname} = luaL_checkstring(L, {idx});")
                 cargs.append(cname)
+            elif cls == "int" and t == "BOOL":
+                # FiveM parity: BOOL params accept booleans, numbers, or nil
+                W(f"    {classify_ctype(cls)} {cname};")
+                W(f"    if (lua_isboolean(L, {idx})) {cname} = lua_toboolean(L, {idx}) ? 1 : 0;")
+                W(f"    else if (lua_isnumber(L, {idx})) {cname} = ({classify_ctype(cls)})lua_tointeger(L, {idx});")
+                W(f"    else {cname} = 0;")
+                cargs.append(cname)
             elif cls == "int":
                 W(f"    {classify_ctype(cls)} {cname} = ({classify_ctype(cls)})luaL_checkinteger(L, {idx});")
                 cargs.append(cname)
+            elif cls == "vec3":   # Vector3 value param -> vec3 userdata -> 3 float regs
+                W(f"    LuaVector3 {cname};")
+                W(f"    if (luaNativeToVec3(L, {idx}, &{cname}.x, &{cname}.y, &{cname}.z))")
+                W(f"        return luaL_error(L, \"{name}: arg {idx} expected vec3\");")
+                cargs.append(f"{cname}.x")
+                cargs.append(f"{cname}.y")
+                cargs.append(f"{cname}.z")
+            elif cls == "vecoutptr":
+                # Vector3* out-param: lenient input, returned as extra vec3
+                W(f"    LuaVector3 {cname} = {{ 0, 0, 0 }};")
+                W(f"    luaNativeToVec3(L, {idx}, &{cname}.x, &{cname}.y, &{cname}.z);")
+                cargs.append(f"&{cname}")
+                retlines.append(f"luaNativePushVec3(L, {cname}.x, {cname}.y, {cname}.z);")
+            elif cls == "floatptr":
+                # float* out-param: number in (else 0), returned as extra number
+                W(f"    float {cname} = lua_isnumber(L, {idx}) ? (float)lua_tonumber(L, {idx}) : 0.0f;")
+                cargs.append(f"&{cname}")
+                retlines.append(f"lua_pushnumber(L, (lua_Number){cname});")
+            elif cls == "boolptr":
+                # BOOL* out-param: returned as extra boolean
+                W(f"    int32_t {cname} = 0;")
+                cargs.append(f"&{cname}")
+                retlines.append(f"lua_pushboolean(L, {cname} != 0);")
+            elif cls == "intptr":
+                # int*/Hash*/Entity*/... out-params: returned as extra integer
+                W(f"    int32_t {cname} = lua_isnumber(L, {idx}) ? (int32_t)lua_tointeger(L, {idx}) : 0;")
+                cargs.append(f"&{cname}")
+                retlines.append(f"lua_pushinteger(L, (lua_Integer){cname});")
+            elif cls == "anyptr":
+                # Any*: opaque pointer value — pass through, no read-back
+                W(f"    uint64_t {cname} = lua_isnumber(L, {idx}) ? (uint64_t)lua_tointeger(L, {idx}) : 0;")
+                cargs.append(f"(void*)(uintptr_t){cname}")
             else:  # unsupported param
                 W(f"    return luaL_error(L, \"{name}: unsupported parameter type at arg {idx}\");")
         argc = ", ".join(cargs) if cargs else ""
         call = f"invoke<{ret_ctype(cls_ret)}>(0x{h:016X}ULL, {argc})" if argc else f"invoke<{ret_ctype(cls_ret)}>(0x{h:016X}ULL)"
-        if cls_ret in ("void", "unsupported", "string"):
+        retn = 0
+        if cls_ret in ("void", "unsupported"):
             W(f"    {call};")
-            W("    return 0;")
         elif cls_ret == "float":
             W(f"    lua_pushnumber(L, (lua_Number)({call}));")
-            W("    return 1;")
-        elif cls_ret == "vecout":
-            W(f"    LuaVector3* r = reinterpret_cast<LuaVector3*>({call});")
-            W("    if (r) { lua_pushnumber(L, r->x); lua_pushnumber(L, r->y); lua_pushnumber(L, r->z); }")
-            W("    else { lua_pushnumber(L, 0); lua_pushnumber(L, 0); lua_pushnumber(L, 0); }")
-            W("    return 3;")
+            retn = 1
+        elif cls_ret == "string":  # const char* return -> Lua string
+            W(f"    const char* s = {call};")
+            W('    lua_pushstring(L, s ? s : "");')
+            retn = 1
+        elif cls_ret == "anyptr":  # Any* return -> opaque integer
+            W(f"    lua_pushnumber(L, (lua_Number)(uintptr_t){call});")
+            retn = 1
+        elif cls_ret == "vec3":   # Vector3 return -> hidden out-ptr -> vec3 userdata
+            W("    LuaVector3 r = { 0, 0, 0 };")
+            call2 = call[:-1] + (", &r)" if argc else ", &r)")
+            W(f"    {call2};")
+            W("    luaNativePushVec3(L, r.x, r.y, r.z);")
+            retn = 1
+        elif ret == "BOOL":
+            # FiveM parity: BOOL-returning natives give Lua booleans
+            W(f"    lua_pushboolean(L, {call} != 0);")
+            retn = 1
         else:
             W(f"    lua_pushnumber(L, (lua_Number)({call}));")
-            W("    return 1;")
+            retn = 1
+        # pointer out-params come back as extra return values (FiveM parity)
+        for rl in retlines:
+            W(f"    {rl}")
+            retn += 1
+        W(f"    return {retn};")
         W("}")
         W("")
 
     # ---- by-name table (sorted case-insensitively) + by-hash table ----
-    W("typedef int (*LuaNativeFn)(lua_State*);")
-    W("struct LuaNativeEntry { const char* name; uint64_t hash; LuaNativeFn fn; };")
-    W("static const LuaNativeEntry LUA_NATIVES[] = {")
-    for name, h in bindings:
+    # (LuaNativeFn / LuaNativeEntry / LUA_NATIVES are declared in the
+    #  hand-written header; the array itself is non-static so the runtime
+    #  can register every native as a Lua global.)
+    W("const LuaNativeEntry LUA_NATIVES[] = {")
+    for name, docName, h in bindings:
         fn_name = "luaN_" + re.sub(r"[^A-Za-z0-9_]", "_", name)
-        W(f'    {{"{name}", 0x{h:016X}ULL, {fn_name}}},')
+        W(f'    {{"{name}", "{docName}", 0x{h:016X}ULL, {fn_name}}},')
     W("};")
     W("")
     W("// by-hash table, sorted by hash for binary search")
     W("static const LuaNativeEntry LUA_NATIVES_BY_HASH[] = {")
-    for name, h in sorted(bindings, key=lambda kv: kv[1]):
+    for name, docName, h in sorted(bindings, key=lambda kv: kv[2]):
         fn_name = "luaN_" + re.sub(r"[^A-Za-z0-9_]", "_", name)
-        W(f'    {{"{name}", 0x{h:016X}ULL, {fn_name}}},')
+        W(f'    {{"{name}", "{docName}", 0x{h:016X}ULL, {fn_name}}},')
     W("};")
     W("")
     W("#ifdef _WIN32")
@@ -270,8 +341,9 @@ def main():
 
 
 def ret_ctype(cls):
-    return {"void": "void", "float": "float", "vecout": "LuaVector3*",
-            "unsupported": "void", "string": "void", "int": "uint64_t"}[cls]
+    return {"void": "void", "float": "float", "vec3": "void",
+            "unsupported": "void", "string": "const char*", "int": "uint64_t",
+            "anyptr": "uint64_t"}[cls]
 
 
 def classify_ctype(cls):

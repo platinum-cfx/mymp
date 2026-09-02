@@ -11,6 +11,9 @@
 #include "lua/lualib.h"
 #if defined(LUA_INCLUDE_LIBGLM)
 extern "C" int luaopen_glm(lua_State*);
+#include "lua/lglm.hpp"       // glm_pushvec3 / glm_tovec3 / glm_vec_boundary
+#include "lua/lstate.h"       // L->ci for in-place vector writes
+#include "lua/lobject.h"      // TValue / ttisvector / vvalue_ / s2v / settt_
 #endif
 
 #include "lua_native_bindings.h"
@@ -206,9 +209,17 @@ int ScriptRuntime::luaNativesCount(lua_State* L) {
 }
 
 int ScriptRuntime::luaVersion(lua_State* L) {
-    lua_pushstring(L, "MyMP client scripting 1.0 (Lua 5.4)");
+    lua_pushstring(L, "MyMP client scripting 1.0 (Lua 5.4 + LuaGLM)");
     return 1;
 }
+
+// ---------------------------------------------------------------------------
+// native vec3 marshaling (LuaGLM <-> game Vector3) — the helpers the
+// generated bindings call so Vector3 returns/out-params speak vec3 userdata
+// exactly like FiveM.
+// ---------------------------------------------------------------------------
+
+
 
 // ---------------------------------------------------------------------------
 // runtime
@@ -282,6 +293,18 @@ void ScriptRuntime::registerApi(lua_State* L) {
     lua_pushcclosure(L, luaVersion, 0);
     lua_setfield(L, -2, "version");
     lua_setglobal(L, "mymp");
+    // FiveM-style native cache: every typed binding becomes a global, so
+    // scripts call PlayerPedId() / GetEntityCoords(...) directly. Each
+    // binding is registered under both its SNAKE_CASE name and its
+    // FiveM-style TitleCase name (the natives-docs name, e.g. GetEntityCoords).
+    for (size_t i = 0; i < LUA_NATIVES_COUNT; ++i) {
+        lua_pushcfunction(L, LUA_NATIVES[i].fn);
+        lua_setglobal(L, LUA_NATIVES[i].name);
+        if (LUA_NATIVES[i].docName && strcmp(LUA_NATIVES[i].docName, LUA_NATIVES[i].name) != 0) {
+            lua_pushcfunction(L, LUA_NATIVES[i].fn);
+            lua_setglobal(L, LUA_NATIVES[i].docName);
+        }
+    }
 }
 
 bool ScriptRuntime::loadResource(const std::string& resource,
@@ -335,3 +358,33 @@ void ScriptRuntime::dispatch(const std::string& event, const std::string& dataJs
 }
 
 }  // namespace mymp
+
+// ---------------------------------------------------------------------------
+// native vec3 marshaling (global scope: declared in lua_native_bindings.h)
+// ---------------------------------------------------------------------------
+void luaNativePushVec3(lua_State* L, float x, float y, float z) {
+#if defined(LUA_INCLUDE_LIBGLM)
+    glm_pushvec3(L, glm::vec<3, float>(x, y, z));
+#else
+    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
+#endif
+}
+
+int luaNativeToVec3(lua_State* L, int idx, float* x, float* y, float* z) {
+#if defined(LUA_INCLUDE_LIBGLM)
+    if (idx < 0) idx = lua_gettop(L) + idx + 1;
+    glm::length_t dims = 0;
+    if (glm_isvector(L, idx, dims) && dims == 3) {
+        glm::vec<3, float> v = glm_tovec3(L, idx);
+        *x = v.x; *y = v.y; *z = v.z;
+        return 0;
+    }
+    return 1;  // not a vec3
+#else
+    *x = (float)luaL_checknumber(L, idx);
+    *y = (float)luaL_checknumber(L, idx + 1);
+    *z = (float)luaL_checknumber(L, idx + 2);
+    return 0;
+#endif
+}
+
