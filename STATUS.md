@@ -1,5 +1,5 @@
 # 📊 MyMP — Project Status & How It Works
-*Last updated: 2026-08-31 · v1.2.0*
+*Last updated: 2026-09-01 · v1.3.0*
 
 ---
 
@@ -30,6 +30,7 @@
 - Discovers the game's native table at runtime (no hardcoded offsets)
 - **Script-thread hook** so natives work in-game (the REQUEST_MODEL fix from community research)
 - Spawns your vehicle, streams position at 10 Hz over UDP, renders other players' vehicles + peds, shows chat as in-game text
+- **Full FiveM-style Lua scripting**: runs the real Cfx Lua 5.4.4 VM + LuaGLM (vendored), per-resource sandboxed environments, `mymp` API (`print`/`on`/`send`/`native`), and **all 6,302 game natives as Lua globals** — `PlayerPedId()`, `GetEntityCoords(...)` work directly, Vector3 args/returns are real `vec3` userdata, and pointer out-params (float*/Hash*/BOOL*/Vector3*) come back as extra return values exactly like FiveM
 - ⚠️ *This sandbox is Linux — it can't produce the Windows .dll. That's the one manual step, on your PC: `build.ps1`.*
 
 ---
