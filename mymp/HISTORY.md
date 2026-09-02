@@ -452,6 +452,25 @@ authoritative with buckets/range/budgets; plugins mirror resources. The
 verified conclusion: **MyMP already is the FiveM model — GTA V only, each
 player in their own single-player session, server sync on top.**
 
+## Chapter 20 — The real FiveM Lua runtime (Cfx Lua 5.4.4 + LuaGLM) (Sep 1, 2026)
+
+Owner direction: "use the 2022 build / all versions up until 2022." The
+2022 FiveM Lua VM is now vendored and running in MyMP:
+
+- `client/src/lua/` = citizenfx/lua @ `luaglm-dev/cfx` (the exact fork FiveM
+  ships; MIT) — Lua 5.4.4 with the LuaGLM extension: `vec3/vec4/quat/mat4`
+  types, `glm.*` API, geometry ext. GLM is pinned to the same commit the 2022
+  FiveM tree pins (`84f2045a`). See `client/src/lua/VENDOR.md`.
+- The VM builds exactly like FiveM's: Lua compiled as C++ (`-x c++`,
+  `-DLUA_INCLUDE_LIBGLM` + the GLM flags), 34 objects (l*.c + lglm.cpp +
+  libs/glm-binding/lglmlib.cpp) -> liblua-cfx.a. Lua headers are included
+  WITHOUT extern "C" (C++-linked symbols).
+- `script_rt.cpp` opens the glm library so vector metatables install;
+  constructors are base-library globals, exactly like FiveM.
+- Tests: 13/13 pass on the real VM, including a LuaGLM vec3/quat/mat4 case.
+- `client/build.ps1` now compiles the full Lua VM + scripting layer into
+  MyMP.asi for the Windows build.
+
 ## Chapter 19 — Client-side scripting: Lua resources run in-game (Sep 1, 2026)
 
 Owner directive: *"client side scripting lua is c# resources run in game,

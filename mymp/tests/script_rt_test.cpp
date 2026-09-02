@@ -6,7 +6,10 @@
 //   g++ -O1 -std=c++17 -Iclient/src tests/script_rt_test.cpp \
 //       client/src/script_rt.cpp client/src/json.cpp \
 //       client/src/lua_native_bindings.cpp \
-//       /tmp/liblua-linux.a -o /tmp/script_rt_test -ldl -lm
+//       -DLUA_INCLUDE_LIBGLM /tmp/liblua-cfx.a -o /tmp/script_rt_test -ldl -lm
+// (liblua-cfx.a = the vendored Cfx Lua 5.4.4 + LuaGLM, built as C++ like
+//  FiveM: g++ -c -x c++ -std=c++17 -DLUA_INCLUDE_LIBGLM [flags] l*.c lglm.cpp
+//  libs/glm-binding/lglmlib.cpp)
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -120,6 +123,21 @@ int main() {
         for (const auto& pr : g_prints)
             if (pr.find("unknown-native-errors-ok") != std::string::npos) printed = true;
         check(printed, "unknown native raised a catchable Lua error");
+    }
+
+    // ---- LuaGLM vector math (the FiveM vec3/quat/mat4 extension) ----
+    {
+        std::string code3 = "local v = vec3(1, 2, 3)\n"
+                            "assert(tostring(v) == 'vec3(1.000000, 2.000000, 3.000000)')"
+                            "\nassert(math.abs(v:length() - 3.741657) < 1e-4)"
+                            "\nassert(v + vec3(1,0,0) == vec3(2,2,3))"
+                            "\nassert(v.x == 1 and v.y == 2 and v.z == 3)"
+                            "\nassert(quat() ~= nil and mat4() ~= nil)"
+                            "\nlocal m = mat4()"
+                            "\nassert(tostring(m):find('mat4x4') ~= nil)"
+                            "\nmymp.print('vec3 math OK: ' .. tostring(v))\n";
+        std::string err3;
+        check(rt.loadResource("vec3test", code3, err3), "LuaGLM vec3 math runs");
     }
 
     printf(g_failures ? "\nSCRIPT RT TEST FAILED (%d)\n" : "\nSCRIPT RT TEST PASSED\n",

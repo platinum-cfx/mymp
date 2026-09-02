@@ -3,10 +3,8 @@
 // Typed Lua bindings for every documented GTA V script native — the same
 // approach FiveM uses (generated native wrappers). Hashes/types are factual
 // game data; the call path is our own runtime-discovered native table.
-extern "C" {
 #include "lua/lua.h"
 #include "lua/lauxlib.h"
-}
 #include "natives.h"
 #include "natives_full.h"
 #include "lua_native_bindings.h"

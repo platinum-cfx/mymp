@@ -6,11 +6,12 @@
 #include <cstdlib>
 #include <cstring>
 
-extern "C" {
 #include "lua/lua.h"
 #include "lua/lauxlib.h"
 #include "lua/lualib.h"
-}
+#if defined(LUA_INCLUDE_LIBGLM)
+extern "C" int luaopen_glm(lua_State*);
+#endif
 
 #include "lua_native_bindings.h"
 #include "net.h"
@@ -254,6 +255,14 @@ void ScriptRuntime::openLibraries(lua_State* L) {
     lua_pushnil(L); lua_setglobal(L, "dofile");
     lua_pushnil(L); lua_setglobal(L, "loadfile");
     lua_pushnil(L); lua_setglobal(L, "print");
+    // LuaGLM (the Cfx Lua extension): opening the glm library installs the
+    // vector/matrix metatables (so vec3:length() etc. work). The vector
+    // constructors (vec3, quat, mat4, ...) are globals registered by the
+    // base library itself, exactly like FiveM.
+#if defined(LUA_INCLUDE_LIBGLM)
+    luaL_requiref(L, "glm", luaopen_glm, 1);
+    lua_pop(L, 1);
+#endif
 }
 
 void ScriptRuntime::registerApi(lua_State* L) {
