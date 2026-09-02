@@ -21,6 +21,12 @@ your server/name/vehicle and writes `mymp.ini`, then launches GTA V for you
 (via `steam -applaunch 271590` when Steam is detected). Re-run it any time to
 change server/name/vehicle.
 
+## 🛠 Build — no Windows needed
+
+The shipped binaries are **cross-built from Linux** with `client/build_win_zig.sh`
+(zig 0.14.1, mingw-w64 target) — same sources, same defines as the MSVC path
+below, fully reproducible. You can also build on Windows (~5 min):
+
 ## 🛠 Build (on Windows, ~5 min)
 
 1. **Install the free "Build Tools for Visual Studio 2022"** (or Visual Studio 2022):

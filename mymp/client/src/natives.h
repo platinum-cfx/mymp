@@ -3,6 +3,7 @@
 // Native hashes are factual game data; all other code in the client is original.
 #pragma once
 #include <cstdint>
+#include <type_traits>
 
 constexpr uint64_t N_PLAYER_PED_ID = 0xD80958FC74E988A6ULL;  // PLAYER
 constexpr uint64_t N_PLAYER_ID = 0x4F8644AF03D0E0D6ULL;  // PLAYER
@@ -72,6 +73,9 @@ extern uint64_t (*g_nativeTable[256][256])();
 template <typename R, typename... A>
 inline R invoke(uint64_t hash, A... args) {
     auto fn = reinterpret_cast<R (*)(A...)>(g_nativeTable[(hash >> 8) & 0xFF][hash & 0xFF]);
-    if (!fn) return R{};
+    if (!fn) {
+        if constexpr (std::is_void_v<R>) return;
+        else return R{};
+    }
     return fn(args...);
 }

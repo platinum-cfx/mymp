@@ -533,3 +533,38 @@ What shipped (generator + runtime + tests, pushed):
   calls, vec3 return, vec3*/float*/Hash*/BOOL* out-param returns, and a
   string-returning native — all against the real Cfx Lua VM with mocked
   native slots.
+
+## Chapter 22 — The real binaries, cross-built from Linux (Sep 2, 2026)
+
+Owner directive: *"do it the way FiveM does it"* — no user-side compiling; ship
+the actual Windows binaries, built here, delivered as the self-contained
+FiveM.exe-style launcher.
+
+What shipped (binaries + toolchain + docs, pushed):
+- **All client binaries are now cross-built from Linux with zig 0.14.1**
+  (`zig cc` = bundled clang + mingw-w64 headers + lld), targeting
+  `x86_64-windows-gnu` — no Visual Studio required anywhere in the pipeline:
+  - `MyMP.asi` — the client DLL (5.3 MB, up from 958 KB): now embeds the full
+    vendored Cfx Lua 5.4.4 VM + LuaGLM + the 6,302 native bindings + Opus
+    voice codec (static). Verified: `PlayerPedId` / `GetEntityCoords` /
+    "MyMP client scripting 1.0 (Lua 5.4 + LuaGLM)" present in the binary.
+  - `MyMP-Launcher.exe` — the GUI launcher (server browser, GTA V detection,
+    ini writer, Steam launch), built from `launcher/mymp_launcher.c`.
+  - `MyMP-Setup.exe` — the installer, built from `installer/mymp_setup.c`.
+  - `MyMP.exe` — the **self-contained FiveM-style launcher** (9.1 MB): the
+    launcher with `MyMP.asi` + the `dinput8.dll` ASI loader appended as a
+    payload (magic `MYMPXSE1`, 40-byte header, verified round-trip). One file
+    to download; it extracts itself into the GTA folder and launches.
+- **Reproducible**: `client/build_win_zig.sh` rebuilds every binary from
+  scratch (downloads zig + opus 1.5.2, same defines as `build.ps1`).
+- **Two real bugs fixed** (would have failed the MSVC build too — the shipped
+  binaries predated the Lua work): `natives.h` `invoke<R>` used `return R{}`
+  on a `void` return (now `if constexpr`), and `client.cpp` used
+  `ScriptRuntime` unqualified (now `mymp::ScriptRuntime`); also fixed a
+  `"Software\MyMP"` escape-sequence warning.
+- `MyMP-GTA-Client.zip` rebuilt (4.7 MB): `MyMP.exe` + `mymp.ini` +
+  `Install to GTA V.bat` + `TESTING.md`. Stale MSVC `.pdb` files removed
+  from the tree (the zig build produces none).
+- Verification: the same sources still pass 16/16 Lua-runtime tests on Linux;
+  every binary is a valid PE32+ (x86-64) checked with `file`/`objdump`, and
+  the launcher payload round-trips byte-exact.

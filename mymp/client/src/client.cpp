@@ -165,7 +165,7 @@ void loadConfig() {
     if (g_cfg.license.empty()) {
         char lic[32];
         HKEY hk;
-        if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\MyMP", 0, KEY_READ | KEY_WRITE, &hk) == ERROR_SUCCESS) {
+        if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\MyMP", 0, KEY_READ | KEY_WRITE, &hk) == ERROR_SUCCESS) {
             DWORD sz = sizeof lic; DWORD type = REG_SZ;
             if (RegQueryValueExA(hk, "license", NULL, &type, (BYTE*)lic, &sz) == ERROR_SUCCESS &&
                 lic[0] && strlen(lic) == 24) {
@@ -415,7 +415,7 @@ void showHelp(const std::string& text) {
 }
 
 // ---------- client-side scripting (Lua resources, like FiveM) ----------
-ScriptRuntime g_scriptRt;
+mymp::ScriptRuntime g_scriptRt;
 std::string g_scriptSecret;
 bool g_scriptsDownloaded = false;
 
